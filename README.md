@@ -1,26 +1,6 @@
-# Apuração Brasil — primeiro turno de 2026
+# Apuração Brasil — primeiro e segundo turno das eleições gerais de 2026
 
-## Versão 0.2.1 — correção de consultas presas
-
-- Consultas em andamento pertencem à própria requisição. O cache global guarda apenas JSON concluído, sem reaproveitar promessas de I/O entre requisições do Worker.
-- Timeout cobre conexão e leitura do corpo: 12 segundos por arquivo, 26 segundos na API e 30 segundos no navegador.
-- O carregamento termina com uma mensagem de erro e libera a atualização manual quando a consulta excede o prazo. Trocar filtros cancela a consulta anterior sem reutilizá-la em outro filtro.
-- Cancelamento de um usuário não deixa erro no cache compartilhado. Mantidos fallback de dados antigos, ETag e espera após falhas da fonte.
-- Logs da API indicam início, conclusão e falha, sem dados pessoais ou credenciais.
-
-## Versão 0.2 — gráficos
-
-Esta versão adiciona três gráficos responsivos em Recharts, carregados separadamente do painel principal:
-
-- Barras horizontais: até seis candidaturas com mais votos. Nomes completos, votos e percentuais oficiais aparecem junto ao gráfico; a lista completa permanece na tabela.
-- Rosca de votos: válidos, brancos e nulos. A base percentual é a soma destas três categorias, sem somar votos de legenda duas vezes e sem incluir anulados/sub judice.
-- Rosca de progresso: seções totalizadas e a totalizar, com o percentual informado pelo TSE.
-
-Os gráficos acompanham os filtros e as atualizações existentes. Não há dados fictícios, projeção de vencedores nem histórico de evolução inventado. Sem votos ou com votação não divulgada, o painel apresenta um estado explicativo. Os avisos de dados antigos continuam aplicáveis aos gráficos. Os valores também aparecem em texto para leitura sem depender de cor ou tooltip.
-
-Arquivos novos: `components/ElectionCharts.tsx` e `lib/chart-data.ts`. O processo de instalação e execução abaixo permanece o mesmo.
-
-Painel simples e responsivo em React, TypeScript e Tailwind CSS. Consulta a fonte pública do TSE pelo servidor, mostra votos, percentuais, seções totalizadas e a situação oficial dos candidatos. Não usa dados fictícios nem prevê vencedores.
+## Versão 0.5.0
 
 ## O que está implementado
 
@@ -37,7 +17,7 @@ O recorte geográfico é UF, nacional ou exterior agregado. Esta versão não in
 
 ## Stack e arquitetura
 
-A aplicação usa o App Router de Next.js (`app/`) e React 19. Na publicação por Sites, o mesmo código é compilado com **Vinext** para Cloudflare Workers. Na sua máquina é possível executar o **Next.js convencional** com os scripts `*:next` abaixo. Não é necessário instalar Express nem configurar PostgreSQL: o Route Handler já faz o papel da API e os resultados vêm da fonte pública. PostgreSQL passa a fazer sentido se você quiser guardar histórico de apuração; isso ainda não está implementado.
+A aplicação usa o App Router de Next.js (`app/`) e React 19. Para executar o projeto, use o **Next.js convencional** com os scripts `*:next` abaixo. Não é necessário instalar Express nem configurar sistema de gerenciamento de dados: o Route Handler já faz o papel da API e os resultados vêm da fonte pública. Instale o PostgreSQL caso você quiser guardar histórico de apuração; feature ainda não está implementado.
 
 Fluxo: navegador → GET /api/results → configuração de eleições do TSE → arquivo do cargo/UF → validação com Zod → normalização → painel React.
 
@@ -48,7 +28,7 @@ Fluxo: navegador → GET /api/results → configuração de eleições do TSE �
 | `lib/catalog.ts` | UFs, cargos e contratos TypeScript |
 | `lib/election.ts` | Esquemas JSON, descoberta da eleição, URLs e normalização |
 | `lib/tse.ts` | Consulta HTTP, cache, ETag, deduplicação e recuperação de falhas |
-| `app/globals.css` | Tailwind e tema verde, amarelo e azul |
+| `app/globals.css` | Tailwind e tema: verde, amarelo e azul |
 | `scripts/test-election.mjs` | Verificação do domínio e da consulta, sem acessar o TSE |
 
 ## Rodar na sua máquina — Windows, Linux ou macOS
@@ -80,7 +60,7 @@ O repositório da versão hospedada preserva seu `pnpm-lock.yaml`. O caminho com
 npm run dev:next
 ```
 
-Abra http://localhost:3000. Para usar outra porta:
+Abra (<http://localhost:3000>). Para usar outra porta:
 
 ```sh
 npm run dev:next -- --port 3001
@@ -91,7 +71,7 @@ Interrompa com Ctrl+C.
 ### 4. Usar o painel
 
 1. A aba **Nacional** abre a presidência com Brasil + exterior.
-2. Em **Por estado**, selecione UF e cargo. Todos os candidatos daquele recorte aparecem na lista; use busca e paginação para deputados.
+2. Em **Por estado e cidade**, selecione UF, cidade e cargo. Todos os candidatos daquele recorte aparecem na lista; use busca e paginação para deputados.
 3. Em **Exterior**, o único cargo disponível é presidente.
 4. A atualização automática consulta a cada 60 segundos enquanto o navegador permanece na aba. Ela não cria tarefas em segundo plano quando o site está fechado.
 5. Compare o horário de geração/totalização do arquivo, a abrangência e o link de origem com o site oficial.
@@ -109,11 +89,11 @@ npm run start:next
 
 ### 6. Publicar em outro provedor, se quiser
 
-No Vercel, use Next.js e configure o comando de build como `npm run build:next`. Também pode hospedar o Next.js em um servidor Node com os comandos anteriores. Nesta entrega não foi criada conta nem configurado um deploy em Vercel, Railway ou Neon. Conexão de conta, credenciais, escolha de plano e mudança de público exigem sua atuação; a etapa correspondente deve aguardar isso.
+No Vercel, use Next.js e configure o comando de build como `npm run build:next`. Também pode hospedar o Next.js em um servidor Node com os comandos anteriores. Nesta entrega não foi criada conta nem configurado um deploy em Vercel, Railway ou Neon.
 
 ## Fonte oficial e construção das URLs
 
-Configuração pública: https://resultados.tse.jus.br/oficial/comum/config/ele-c.json
+Configuração pública: (<https://resultados.tse.jus.br/oficial/comum/config/ele-c.json>)
 
 O servidor encontra o ciclo `ele2026`, a data `04/10/2026` e o turno `1`. Identifica a eleição que contém o cargo solicitado, em vez de usar códigos de 2022. Na configuração consultada em 04/10/2026: presidente usa 6257; os cargos estaduais, incluindo deputado federal, usam 6259.
 
@@ -134,7 +114,7 @@ https://resultados.tse.jus.br/oficial/ele2026/6259/dados/rs/rs-c0006-e006259-u.j
 | Deputado estadual | 7 |
 | Deputado distrital | 8 |
 
-Documentação de 2026: https://www.tse.jus.br/eleicoes/informacoes-tecnicas-sobre-a-divulgacao-de-resultados
+Documentação de 2026: (<https://www.tse.jus.br/eleicoes/informacoes-tecnicas-sobre-a-divulgacao-de-resultados>)
 
 Leia os documentos EA11 (configuração), EA20 (resultado unificado) e as instruções de download. A documentação oficial informa disponibilização pública sem cadastro, limites de acesso e uso da abrangência ZZ para exterior. O painel informa fonte e horários e se identifica como projeto independente.
 
@@ -172,8 +152,7 @@ Para tráfego público elevado ou várias réplicas, use cache e limitação dis
 
 **Layout ou filtro inesperado:** informe UF, cargo, navegador e a mensagem apresentada. Nunca envie credenciais no chat.
 
-
-## Versão 0.3.0 — regiões e fotos
+## regiões e fotos
 
 - Na aba **Por região / estado**, selecione Sul, Sudeste, Centro-Oeste, Norte, Nordeste ou todas as regiões. O filtro restringe a lista de UFs; os resultados e gráficos continuam sendo da UF selecionada, sem somar disputas de cargos diferentes entre estados.
 - Ao trocar a região, mantém a UF se ela pertencer à região; caso contrário, seleciona a primeira UF em ordem alfabética. DF mantém deputado distrital.
@@ -181,8 +160,7 @@ Para tráfego público elevado ou várias réplicas, use cache e limitação dis
 - Imagens usam lazy loading, dimensões fixas e fallback de iniciais quando indisponíveis. Não entram no caminho da consulta nem alteram seus limites de tempo.
 - Nenhuma chave ou conta adicional é necessária. A configuração e os comandos locais existentes continuam válidos.
 
-
-## Versão 0.4.0 — presidente por região na aba Nacional
+## presidente por região na aba Nacional
 
 A abrangência nacional permite Brasil + exterior (arquivo original do TSE) ou Sul, Sudeste, Centro-Oeste, Norte e Nordeste. As regiões somam todos os arquivos de presidente das UFs correspondentes, sem exterior. O filtro anterior por estado permanece independente.
 
@@ -190,15 +168,14 @@ A API aceita `/api/results?uf=br&office=1&region=sul` (e os demais códigos do c
 
 Não publica uma soma faltando UFs ou com listas incompatíveis. Quando a fonte falha, usa somente a última soma completa da região, sinalizada como desatualizada, ou retorna erro. Se uma UF retém a votação, oculta a votação regional. Consultas à fonte são espaçadas em 250 ms, com cancelamento e os limites de tempo já existentes.
 
-
-## Versão 0.5.0 — filtro municipal
+## filtro municipal
 
 Na aba **Por região / estado**, o fluxo é Região → UF → Cidade → Cargo. “Todo o estado / DF” preserva a consulta estadual. Trocar região ou UF limpa a cidade; trocar cargo mantém a cidade. O filtro nacional por regiões e a consulta do exterior permanecem independentes.
 
 A lista de municípios vem do arquivo oficial EA12 (`mun-e{eleicao com 6 dígitos}-cm.json`), resolvendo a eleição federal na configuração do TSE. O código usado é `mu.cd` (código eleitoral com 5 dígitos), não `cdi` (IBGE). A API `/api/municipalities?uf=rs` fornece códigos e nomes de cidades exclusivamente dessa UF, com cache de 1 hora e timeout.
 
-Resultados: `/api/results?uf=rs&office=1&municipality=88633` (São Borja). Arquivo EA20: `rs88633-c0001-e006257-u.json`. A API valida que o município pertence à UF antes de consultar o arquivo, confere `tpabr=mu` e `cdabr`, preserva zeros iniciais e separa o cache por UF, cargo e município. Para DF, o catálogo eleitoral fornece Brasília; deputado distrital segue o ajuste existente.
+Resultados: `/api/results?uf=rs&office=1&municipality=88633` EX.: (São Borja). Arquivo EA20: `rs88633-c0001-e006257-u.json`. A API valida que o município pertence à UF antes de consultar o arquivo, confere `tpabr=mu` e `cdabr`, preserva zeros iniciais e separa o cache por UF, cargo e município. Para DF, o catálogo eleitoral fornece Brasília; deputado distrital segue o ajuste existente.
 
 Votos, gráficos, fotos, busca e paginação passam a usar o resultado municipal. A conclusão da apuração local usa `and=f`, sem depender da totalização final da eleição inteira (`tf`). A votação em uma cidade não determina eleitos para cargos estaduais ou nacionais. A lista tem carregamento com prazo máximo, cancelamento na troca de UF e botão de nova tentativa.
 
-Referência oficial: https://www.tse.jus.br/eleicoes/informacoes-tecnicas-sobre-a-divulgacao-de-resultados
+Referência oficial: (<https://www.tse.jus.br/eleicoes/informacoes-tecnicas-sobre-a-divulgacao-de-resultados>)
