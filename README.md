@@ -1,7 +1,5 @@
 # Apuração Brasil — primeiro e segundo turno das eleições gerais de 2026
 
-## Versão 0.5.0
-
 ## O que está implementado
 
 - Presidência: resultado nacional **incluindo o exterior**, resultado por UF e resultado somente do exterior (ZZ).
