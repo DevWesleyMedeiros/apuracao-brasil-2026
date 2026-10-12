@@ -43,7 +43,10 @@ next-env.d.ts
 /.wrangler/
 # Checkout-local execution profile and tool state; never publish them.
 /.sites-runtime/
-/.agents/
+AGENTS.md
+AGENTES.md
+CLAUDE.md
 /.codex/
+/.claude/
 /outputs/
 /work/
