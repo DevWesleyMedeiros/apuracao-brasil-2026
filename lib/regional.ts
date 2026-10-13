@@ -1,4 +1,22 @@
-import { REGIONS, type Result, type Candidate } from './catalog';
+import { REGIONS } from './catalog';
+import type { Candidate, Result } from './catalog';
+
+function matchesCandidateIds(result: Result, ids: Set<string>, expectedCount: number) {
+    if (result.candidates.length !== expectedCount) return false;
+    const resultIds = new Set(result.candidates.map(candidate => candidate.id));
+    if (resultIds.size !== expectedCount) return false;
+    return result.candidates.every(candidate => ids.has(candidate.id));
+}
+
+function containsHiddenVotes(results: Result[]) {
+    for (const result of results) {
+        if (result.state === 'withheld') return true;
+        for (const candidate of result.candidates) {
+            if (candidate.votes === null) return true;
+        }
+    }
+    return false;
+}
 
 export function aggregateRegion(code: string, results: Result[]): Result {
     const region = REGIONS.find(r => r.code === code);
@@ -10,9 +28,9 @@ export function aggregateRegion(code: string, results: Result[]): Result {
     if (results.some(r => r.office !== '1' || r.election !== first.election || r.stale))
         throw new Error('Os arquivos da região precisam ser da mesma eleição e consulta atual.');
     const ids = new Set(first.candidates.map(c => c.id));
-    if (results.some(r => r.candidates.length !== ids.size || new Set(r.candidates.map(c => c.id)).size !== ids.size || r.candidates.some(c => !ids.has(c.id))))
+    if (results.some(result => !matchesCandidateIds(result, ids, ids.size)))
         throw new Error('As listas de candidatos da região ainda não estão sincronizadas.');
-    const hidden = results.some(r => r.state === 'withheld' || r.candidates.some(c => c.votes === null));
+    const hidden = containsHiddenVotes(results);
     const sum = (get: (r: Result) => number) => results.reduce((total, r) => total + get(r), 0);
     const valid = hidden ? 0 : sum(r => r.votes.valid);
     const total = hidden ? 0 : sum(r => r.sections.total);
