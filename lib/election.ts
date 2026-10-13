@@ -1,15 +1,18 @@
-import { STATES, type Result, type Municipality } from './catalog';
+import { STATES } from './catalog';
+import type { Municipality, Result } from './catalog';
 import { validateMunicipalityFilter } from './municipal';
 export { STATES, OFFICES } from './catalog';
 export type { Candidate, Result } from './catalog';
 import { z } from 'zod';
 export const CONFIG_URL = 'https://resultados.tse.jus.br/oficial/comum/config/ele-c.json';
+const STATE_CODES = new Set<string>(STATES.map(([code]) => code));
+const VALID_OFFICES = new Set(['1', '3', '5', '6', '7', '8']);
 const text = z.string();
 const candidate = z.object({ n: text, sqcand: text, nmu: text, nm: text, vap: text, pvap: text, st: text, dvt: text.optional(), e: z.enum(['s', 'n']) });
 export const resultSchema = z.object({ ele: text, t: z.literal('1'), f: z.literal('o'), cdabr: text, tpabr: text, dg: text, hg: text, dt: text, ht: text, dv: z.enum(['s', 'n']), tf: z.enum(['s', 'n']), and: z.enum(['n', 'p', 'f']), carg: z.array(z.object({ cd: text, nmn: text, nv: text, agr: z.array(z.object({ par: z.array(z.object({ sg: text, cand: z.array(candidate) })) })) })), s: z.object({ ts: text, st: text, pst: text }), v: z.object({ vv: text, vb: text, tvn: text, vl: text.optional() }) });
 export const configSchema = z.object({ f: z.literal('o'), pl: z.array(z.object({ c: text, dt: text, e: z.array(z.object({ cd: text, t: text, abr: z.array(z.object({ cp: z.array(z.object({ cd: text })) })) })) })) });
 export function querySelection(uf: string, office: string) {
-    if (!['br', 'zz', ...STATES.map(s => s[0])].includes(uf) || !['1', '3', '5', '6', '7', '8'].includes(office))
+    if ((uf !== 'br' && uf !== 'zz' && !STATE_CODES.has(uf)) || !VALID_OFFICES.has(office))
         throw new Error('Filtro inválido.');
     if ((uf === 'br' || uf === 'zz') && office !== '1')
         throw new Error('Selecione uma UF para este cargo.');
@@ -39,11 +42,59 @@ export function resultUrl(uf: string, office: string, election: string, municipa
 export function candidatePhotoUrl(uf: string, office: string, election: string, candidateId: string): string | null {
     if (!/^\d{1,6}$/.test(election) || !/^\d{1,20}$/.test(candidateId)) return null;
     const photoUf = office === '1' ? 'br' : uf;
-    if (photoUf !== 'br' && !STATES.some(([code]) => code === photoUf)) return null;
+    if (photoUf !== 'br' && !STATE_CODES.has(photoUf)) return null;
     return `https://resultados.tse.jus.br/oficial/ele2026/${election}/fotos/${photoUf}/${candidateId}.jpeg`;
 }
-export function numeric(value: string) { const n = Number(value.replace(',', '.')); if (value === '' || !Number.isFinite(n) || n < 0)
-    throw new Error('Número inválido no arquivo do TSE.'); return n; }
+export function numeric(value: string) {
+    const n = Number(value.replace(',', '.'));
+    if (value === '' || !Number.isFinite(n) || n < 0) throw new Error('Número inválido no arquivo do TSE.');
+    return n;
+}
+
+function normalizeCandidate(
+    entry: z.infer<typeof candidate>,
+    party: string,
+    hidden: boolean,
+    uf: string,
+    office: string,
+    election: string,
+) {
+    return {
+        id: entry.sqcand,
+        number: entry.n,
+        name: entry.nmu || entry.nm,
+        party,
+        votes: hidden ? null : numeric(entry.vap),
+        percent: hidden ? null : numeric(entry.pvap),
+        status: entry.st,
+        destination: entry.dvt ?? '',
+        elected: !hidden && entry.e === 's',
+        photoUrl: candidatePhotoUrl(uf, office, election, entry.sqcand),
+    };
+}
+
+function compareCandidates(a: Result['candidates'][number], b: Result['candidates'][number]) {
+    return (b.votes ?? 0) - (a.votes ?? 0) || a.name.localeCompare(b.name, 'pt-BR');
+}
+
+function normalizeCandidates(
+    groups: z.infer<typeof resultSchema>['carg'][number]['agr'],
+    hidden: boolean,
+    uf: string,
+    office: string,
+    election: string,
+) {
+    const candidates: ReturnType<typeof normalizeCandidate>[] = [];
+    for (const group of groups) {
+        for (const party of group.par) {
+            for (const candidate of party.cand) {
+                candidates.push(normalizeCandidate(candidate, party.sg, hidden, uf, office, election));
+            }
+        }
+    }
+    return candidates.sort(compareCandidates);
+}
+
 export function normalizeResult(raw: unknown, uf: string, office: string, election: string, sourceUrl: string, municipality?: Municipality): Result {
     const validation = resultSchema.safeParse(raw);
     if (!validation.success)
@@ -56,7 +107,6 @@ export function normalizeResult(raw: unknown, uf: string, office: string, electi
     if (!cargo)
         throw new Error('Cargo ausente no arquivo do TSE.');
     const hidden = data.dv === 'n';
-    const candidates = cargo.agr.flatMap(a => a.par.flatMap(p => p.cand.map(c => ({ id: c.sqcand, number: c.n, name: c.nmu || c.nm, party: p.sg, votes: hidden ? null : numeric(c.vap), percent: hidden ? null : numeric(c.pvap), status: c.st, destination: c.dvt ?? '', elected: !hidden && c.e === 's', photoUrl: candidatePhotoUrl(uf, office, election, c.sqcand) }))));
-    candidates.sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0) || a.name.localeCompare(b.name, 'pt-BR'));
+    const candidates = normalizeCandidates(cargo.agr, hidden, uf, office, election);
     return { office, uf, ...(municipality ? { municipality } : {}), title: cargo.nmn, election, sourceUrl, generatedAt: `${data.dg} ${data.hg}`, totalizedAt: data.dt && data.ht ? `${data.dt} ${data.ht}` : null, checkedAt: new Date().toISOString(), state: hidden ? 'withheld' : data.and === 'n' ? 'waiting' : data.tf === 's' || (municipality && data.and === 'f') ? 'finished' : 'partial', seats: numeric(cargo.nv), candidates, sections: { total: numeric(data.s.ts), count: numeric(data.s.st), percent: numeric(data.s.pst) }, votes: { valid: numeric(data.v.vv), blank: numeric(data.v.vb), null: numeric(data.v.tvn), legend: data.v.vl === undefined ? null : numeric(data.v.vl) } };
 }
