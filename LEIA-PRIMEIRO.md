@@ -1,6 +1,8 @@
 # Execução local e publicação do projeto apuracao-brasil-2026 — versão 0.5.0
 
-Sistema de acompanhanento eleitoral do primeiro turno eleições gerais no Brasil. Versão atual com regiões nacionais, UFs, cidades, fotos e gráficos.
+Sistema de acompanhamento das eleições gerais de 2026. Primeiro turno preservado; segundo turno presidencial selecionado explicitamente. Regiões, UFs, cidades, fotos e gráficos continuam independentes da projeção.
+
+Projeção: `/projecao` e `/projecao/metodologia`; base inicialmente vazia, probabilidades públicas e live desabilitados. Nenhum coletor está em execução. Operação, scripts e dependências reais em [docs/forecast/OPERACAO.md](docs/forecast/OPERACAO.md).
 
 ## Instalação
 
