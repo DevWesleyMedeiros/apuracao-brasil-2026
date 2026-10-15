@@ -1,6 +1,5 @@
-
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCheck,
   ChevronLeft,
@@ -38,10 +37,8 @@ import {
   REGIONS,
   statesInRegion,
   selectRegionUf,
-  type RegionCode,
-  type Municipality,
-  type Result,
 } from "@/lib/catalog";
+import type { RegionCode, Municipality, Result } from "@/lib/catalog";
 import { MunicipalityFilter } from "@/components/MunicipalityFilter";
 import { CandidatePhoto } from "@/components/CandidatePhoto";
 import { loadElectionResult } from "@/lib/result-client";
@@ -53,12 +50,17 @@ const ElectionCharts = dynamic(() => import("@/components/ElectionCharts"), {
     />
   ),
 });
+const numberFormatter = new Intl.NumberFormat("pt-BR");
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 const number = (n: number | null | undefined) =>
-  n == null ? "—" : new Intl.NumberFormat("pt-BR").format(n);
+  n == null ? "—" : numberFormatter.format(n);
 const percent = (n: number | null | undefined) =>
   n == null
     ? "—"
-    : `${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+    : `${percentFormatter.format(n)}%`;
 const statuses = {
   waiting: "Aguardando apuração",
   partial: "Apuração parcial",
@@ -66,6 +68,76 @@ const statuses = {
   withheld: "Votação não divulgada",
 };
 type Scope = "national" | "state" | "abroad";
+const regionByCode = new Map<string, (typeof REGIONS)[number]>(
+  REGIONS.map((region) => [region.code, region]),
+);
+const stateNames = new Map<string, string>(STATES);
+const officeNames = new Map<string, string>(OFFICES);
+const scopeUf = { national: "br", abroad: "zz" };
+const voteLabels = [
+  ["valid", "Votos válidos"],
+  ["blank", "Votos em branco"],
+  ["null", "Votos nulos"],
+  ["legend", "Votos de legenda"],
+] as const;
+
+function officeName(office: string, uf: string) {
+  if (office === "7" && uf === "df") return "Deputado distrital";
+  return officeNames.get(office);
+}
+
+function locationName(
+  scope: Scope,
+  uf: string,
+  region: Result["region"],
+  city: Municipality | undefined,
+) {
+  if (scope === "abroad") return "Exterior";
+  if (scope === "state") {
+    if (city) return `${city.name} / ${uf.toUpperCase()}`;
+    return stateNames.get(uf) ?? uf;
+  }
+  if (region) return `Região ${regionByCode.get(region)?.name}`;
+  return "Brasil + exterior";
+}
+
+function resultStatus(result: Result) {
+  if (result.state !== "finished") return statuses[result.state];
+  if (result.municipality) return "Apuração concluída na cidade";
+  if (result.region) return "Apuração concluída na região";
+  return statuses.finished;
+}
+
+function sectionDescription(result: Result) {
+  if (result.state === "waiting")
+    return "O arquivo oficial está disponível; a totalização ainda não começou.";
+  if (result.state === "withheld")
+    return "O TSE ainda não liberou a votação desta abrangência.";
+  return `${number(result.sections.count)} de ${number(result.sections.total)} seções totalizadas`;
+}
+
+function resultDisclaimer(result: Result) {
+  if (result.region)
+    return "Soma calculada pelo painel a partir dos arquivos oficiais das UFs. Percentuais sobre os votos válidos da região; seções totalizadas sobre o total de seções. Arquivos podem ter horários diferentes. Este recorte não determina a situação eleitoral dos candidatos.";
+  if (result.municipality)
+    return "Votação registrada nesta cidade para os cargos das eleições gerais. A classificação municipal não determina quem foi eleito; a disputa é estadual ou nacional.";
+  return "Percentuais e situações reproduzem o TSE. A ordem por votos não determina eleitos para cargos proporcionais.";
+}
+
+type QueryState = {
+  key: string;
+  result: Result | null;
+  loading: boolean;
+  error: string;
+  lastCheck: string;
+};
+
+function initialQuery(key: string): QueryState {
+  return { key, result: null, loading: true, error: "", lastCheck: "" };
+}
+
+const MemoElectionCharts = memo(ElectionCharts);
+
 export default function Page() {
   const [citySelection, setCitySelection] = useState<{
     uf: string;
@@ -73,7 +145,7 @@ export default function Page() {
   } | null>(null);
   const [nationalRegion, setNationalRegion] = useState<RegionCode>("all");
   const [region, setRegion] = useState<RegionCode>("all");
-  const availableStates = statesInRegion(region);
+  const availableStates = useMemo(() => statesInRegion(region), [region]);
   const changeRegion = (value: string) => {
     const next = value as RegionCode;
     setRegion(next);
@@ -83,13 +155,7 @@ export default function Page() {
   const [scope, setScope] = useState<Scope>("national"),
     [uf, setUf] = useState("rs"),
     [office, setOffice] = useState("1");
-  const [result, setResult] = useState<Result | null>(null),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState(""),
-    [auto, setAuto] = useState(true),
-    [search, setSearch] = useState(""),
-    [page, setPage] = useState(0),
-    [lastCheck, setLastCheck] = useState("");
+  const [auto, setAuto] = useState(true);
   const controller = useRef<AbortController | null>(null),
     sequence = useRef(0),
     busy = useRef(false);
@@ -102,29 +168,27 @@ export default function Page() {
     scope === "national" && nationalRegion !== "all"
       ? nationalRegion
       : undefined;
-  const selectedUf =
-    scope === "national" ? "br" : scope === "abroad" ? "zz" : uf;
+  const selectedUf = scope === "state" ? uf : scopeUf[scope];
   const selectedOffice = scope === "state" ? office : "1";
-  const location =
-    scope === "national"
-      ? selectedRegion
-        ? `Região ${REGIONS.find((r) => r.code === selectedRegion)?.name}`
-        : "Brasil + exterior"
-      : scope === "abroad"
-        ? "Exterior"
-        : selectedCity
-          ? `${selectedCity.name} / ${uf.toUpperCase()}`
-          : (STATES.find((s) => s[0] === uf)?.[1] ?? uf);
+  const location = locationName(scope, uf, selectedRegion, selectedCity);
+  const queryKey = JSON.stringify([
+    selectedUf,
+    selectedOffice,
+    selectedRegion,
+    selectedMunicipality,
+  ]);
+  const [query, setQuery] = useState(() => initialQuery(queryKey));
+  // Reset before committing a new territory, not in a post-render effect.
+  if (query.key !== queryKey) setQuery(initialQuery(queryKey));
+  const currentQuery = query.key === queryKey ? query : initialQuery(queryKey);
+  const { result, loading, error, lastCheck } = currentQuery;
   const load = useCallback(
-    async (clear = false) => {
+    async () => {
       controller.current?.abort();
       const ctrl = new AbortController();
       controller.current = ctrl;
       const id = ++sequence.current;
       busy.current = true;
-      if (clear) setResult(null);
-      setLoading(true);
-      setError("");
       try {
         const data = await loadElectionResult(
           selectedUf,
@@ -134,40 +198,51 @@ export default function Page() {
           selectedRegion,
           selectedMunicipality,
         );
-        if (id === sequence.current) {
-          setResult(data);
-          setLastCheck(
-            new Date().toLocaleTimeString("pt-BR", {
-              timeZone: "America/Sao_Paulo",
-            }),
-          );
-        }
+        if (id !== sequence.current || ctrl.signal.aborted) return;
+        const lastCheck = new Date().toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+        });
+        setQuery((current) => {
+          if (current.key !== queryKey) return current;
+          return {
+            key: queryKey,
+            result: data,
+            loading: false,
+            error: "",
+            lastCheck,
+          };
+        });
       } catch (e) {
-        if (id === sequence.current && !ctrl.signal.aborted)
-          setError(e instanceof Error ? e.message : "Falha na consulta.");
+        if (id !== sequence.current || ctrl.signal.aborted) return;
+        setQuery((current) => {
+          if (current.key !== queryKey) return current;
+          return {
+            ...current,
+            loading: false,
+            error: e instanceof Error ? e.message : "Falha na consulta.",
+          };
+        });
       } finally {
-        if (id === sequence.current) {
-          setLoading(false);
-          busy.current = false;
-        }
+        if (id === sequence.current) busy.current = false;
       }
     },
-    [selectedUf, selectedOffice, selectedRegion, selectedMunicipality],
+    [selectedUf, selectedOffice, selectedRegion, selectedMunicipality, queryKey],
   );
+  const refresh = useCallback(() => {
+    setQuery((current) => ({ ...current, loading: true, error: "" }));
+    void load();
+  }, [load]);
   useEffect(() => {
-    setPage(0);
-    setSearch("");
-    setLastCheck("");
-    void load(true);
+    void load();
     return () => controller.current?.abort();
   }, [load]);
   useEffect(() => {
     if (!auto) return;
     const timer = setInterval(() => {
-      if (!document.hidden && !busy.current) void load();
+      if (!document.hidden && !busy.current) refresh();
     }, 60000);
     return () => clearInterval(timer);
-  }, [auto, load]);
+  }, [auto, refresh]);
   const snapshot = useRef({
     scope,
     municipality: selectedMunicipality,
@@ -178,16 +253,27 @@ export default function Page() {
     error,
     loading,
   });
-  snapshot.current = {
+  useEffect(() => {
+    snapshot.current = {
+      scope,
+      municipality: selectedMunicipality,
+      region: selectedRegion,
+      uf: selectedUf,
+      office: selectedOffice,
+      result,
+      error,
+      loading,
+    };
+  }, [
     scope,
-    municipality: selectedMunicipality,
-    region: selectedRegion,
-    uf: selectedUf,
-    office: selectedOffice,
+    selectedMunicipality,
+    selectedRegion,
+    selectedUf,
+    selectedOffice,
     result,
     error,
     loading,
-  };
+  ]);
   useEffect(() => {
     const ctx = (
       document as Document & {
@@ -233,16 +319,7 @@ export default function Page() {
     }
     return () => lifecycle.abort();
   }, []);
-  const filtered =
-    result?.candidates.filter((c) =>
-      `${c.name} ${c.party} ${c.number}`
-        .toLocaleLowerCase("pt-BR")
-        .includes(search.toLocaleLowerCase("pt-BR")),
-    ) ?? [];
-  const pages = Math.max(1, Math.ceil(filtered.length / 20)),
-    safePage = Math.min(page, pages - 1),
-    visible = filtered.slice(safePage * 20, safePage * 20 + 20),
-    hidden = result?.state === "withheld";
+  const hidden = result?.state === "withheld";
   return (
     <div className="min-h-screen">
       <header className="border-t-4 border-yellow-400 bg-[#075536] text-white">
@@ -302,6 +379,7 @@ export default function Page() {
             <div className="rounded-lg border bg-card p-4">
               <label
                 id="national-region-label"
+                htmlFor="national-region"
                 className="mb-2 block text-sm font-semibold"
               >
                 Abrangência para presidente
@@ -311,6 +389,7 @@ export default function Page() {
                 onValueChange={(v) => setNationalRegion(v as RegionCode)}
               >
                 <SelectTrigger
+                  id="national-region"
                   aria-labelledby="national-region-label"
                   className="h-11 w-full bg-white sm:w-80"
                 >
@@ -327,7 +406,7 @@ export default function Page() {
               </Select>
               <p className="mt-3 text-sm text-muted-foreground">
                 {selectedRegion
-                  ? `Soma dos votos para presidente nas ${REGIONS.find((r) => r.code === selectedRegion)?.states.length} UFs da região. Não inclui o exterior.`
+                  ? `Soma dos votos para presidente nas ${regionByCode.get(selectedRegion)?.states.length} UFs da região. Não inclui o exterior.`
                   : "Presidente · total nacional, incluindo os votos do exterior."}
               </p>
             </div>
@@ -343,11 +422,13 @@ export default function Page() {
                 <label
                   className="mb-2 block text-sm font-semibold"
                   id="region-label"
+                  htmlFor="region"
                 >
                   Região
                 </label>
                 <Select value={region} onValueChange={changeRegion}>
                   <SelectTrigger
+                    id="region"
                     aria-labelledby="region-label"
                     className="h-11 w-full bg-white"
                   >
@@ -367,6 +448,7 @@ export default function Page() {
                 <label
                   className="mb-2 block text-sm font-semibold"
                   id="state-label"
+                  htmlFor="state"
                 >
                   Estado / Distrito Federal
                 </label>
@@ -378,6 +460,7 @@ export default function Page() {
                   }}
                 >
                   <SelectTrigger
+                    id="state"
                     aria-labelledby="state-label"
                     className="h-11 w-full bg-white"
                   >
@@ -404,11 +487,13 @@ export default function Page() {
                 <label
                   className="mb-2 block text-sm font-semibold"
                   id="office-label"
+                  htmlFor="office"
                 >
                   Cargo
                 </label>
                 <Select value={office} onValueChange={setOffice}>
                   <SelectTrigger
+                    id="office"
                     aria-labelledby="office-label"
                     className="h-11 w-full bg-white"
                   >
@@ -417,9 +502,7 @@ export default function Page() {
                   <SelectContent position="popper">
                     {OFFICES.map(([code, name]) => (
                       <SelectItem key={code} value={code}>
-                        {code === "7" && uf === "df"
-                          ? "Deputado distrital"
-                          : name}
+                        {code === "7" ? officeName(code, uf) : name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -436,10 +519,7 @@ export default function Page() {
         <div className="my-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-xl font-bold">
-              {result?.title ??
-                (selectedOffice === "7" && uf === "df"
-                  ? "Deputado distrital"
-                  : OFFICES.find((o) => o[0] === selectedOffice)?.[1])}
+              {result?.title ?? officeName(selectedOffice, uf)}
             </h2>
             <span className="rounded-md bg-[#e6eef8] px-2.5 py-1 text-sm font-medium text-[#174e83]">
               {location}
@@ -454,7 +534,7 @@ export default function Page() {
             </div>
             <button
               disabled={loading}
-              onClick={() => void load()}
+              onClick={refresh}
               className="action-button"
             >
               <RefreshCw
@@ -484,7 +564,7 @@ export default function Page() {
             pode ter resultados mais recentes.
           </div>
         )}
-        {loading && !result ? (
+        {loading && !result && (
           <div
             aria-label="Carregando resultados"
             className="grid grid-cols-2 gap-4 lg:grid-cols-4"
@@ -493,7 +573,8 @@ export default function Page() {
               <Skeleton className="h-32 rounded-lg" key={i} />
             ))}
           </div>
-        ) : result ? (
+        )}
+        {result && (
           <>
             <section className="mb-5 rounded-lg border border-green-200 bg-white p-5">
               <div className="flex flex-wrap justify-between gap-3">
@@ -502,19 +583,10 @@ export default function Page() {
                     {result.state === "finished" && (
                       <CheckCheck className="size-5" />
                     )}
-                    {(result.region || result.municipality) &&
-                    result.state === "finished"
-                      ? result.municipality
-                        ? "Apuração concluída na cidade"
-                        : "Apuração concluída na região"
-                      : statuses[result.state]}
+                    {resultStatus(result)}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {result.state === "waiting"
-                      ? "O arquivo oficial está disponível; a totalização ainda não começou."
-                      : hidden
-                        ? "O TSE ainda não liberou a votação desta abrangência."
-                        : `${number(result.sections.count)} de ${number(result.sections.total)} seções totalizadas`}
+                    {sectionDescription(result)}
                   </p>
                 </div>
                 <strong className="text-2xl tabular-nums text-[#075536]">
@@ -524,153 +596,21 @@ export default function Page() {
               <Progress
                 value={hidden ? 0 : result.sections.percent}
                 aria-label="Percentual de seções totalizadas"
-                className="mt-4 h-2 bg-green-100 [&_[data-slot=progress-indicator]]:bg-[#098552]"
+                className="mt-4 h-2 bg-green-100 **:data-[slot=progress-indicator]:bg-[#098552]"
               />
             </section>
             <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[
-                ["Votos válidos", result.votes.valid],
-                ["Votos em branco", result.votes.blank],
-                ["Votos nulos", result.votes.null],
-                ["Votos de legenda", result.votes.legend],
-              ].map(([label, value]) => (
+              {voteLabels.map(([key, label]) => (
                 <div key={label} className="rounded-lg border bg-card p-4">
                   <p className="text-sm text-muted-foreground">{label}</p>
                   <p className="mt-2 text-2xl font-bold tabular-nums">
-                    {hidden ? "—" : number(value as number)}
+                    {hidden ? "—" : number(result.votes[key])}
                   </p>
                 </div>
               ))}
             </div>
-            <ElectionCharts result={result} />
-            <section className="overflow-hidden rounded-lg border bg-card">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b p-5">
-                <div>
-                  <h3 className="text-lg font-bold">Candidaturas</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {result.candidates.length} candidatos ·{" "}
-                    {number(result.seats)}{" "}
-                    {result.seats === 1 ? "vaga" : "vagas"}
-                  </p>
-                </div>
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                  <input
-                    aria-label="Buscar candidato, partido ou número"
-                    className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Nome, partido ou número"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(0);
-                    }}
-                  />
-                </div>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50">
-                    <TableHead className="pl-5">Candidato / partido</TableHead>
-                    <TableHead className="text-right">Votos</TableHead>
-                    <TableHead className="pr-5 text-right">
-                      {result.region ? "% na região" : "% TSE"}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visible.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="min-w-60 py-4 pl-5">
-                        <div className="flex items-start gap-3">
-                          <CandidatePhoto
-                            key={`${result.election}:${c.id}`}
-                            name={c.name}
-                            url={c.photoUrl}
-                          />
-                          <div className="min-w-0">
-                            <p className="whitespace-normal font-semibold">
-                              {c.name}
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {c.party} · {c.number}
-                            </p>
-                            {c.status && (
-                              <p
-                                className={`mt-1 whitespace-normal text-sm ${c.elected ? "font-semibold text-green-800" : "text-muted-foreground"}`}
-                              >
-                                {c.status}
-                              </p>
-                            )}
-                            {c.destination && (
-                              <p className="mt-1 whitespace-normal text-sm text-muted-foreground">
-                                {c.destination}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {number(c.votes)}
-                      </TableCell>
-                      <TableCell className="pr-5 text-right">
-                        <span className="font-semibold tabular-nums">
-                          {percent(c.percent)}
-                        </span>
-                        <div
-                          aria-hidden="true"
-                          className="mt-2 ml-auto h-1 w-16 overflow-hidden rounded-full bg-green-100 sm:w-28"
-                        >
-                          <div
-                            className="h-full bg-[#098552]"
-                            style={{
-                              width: `${Math.min(100, c.percent ?? 0)}%`,
-                            }}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {!visible.length && (
-                <p className="p-8 text-center text-muted-foreground">
-                  {search
-                    ? "Nenhum candidato corresponde à busca."
-                    : "Nenhuma candidatura disponível neste arquivo."}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4">
-                <p className="text-sm text-muted-foreground">
-                  {filtered.length
-                    ? `${safePage * 20 + 1}–${Math.min((safePage + 1) * 20, filtered.length)} de ${filtered.length}`
-                    : "0 candidatos"}
-                </p>
-                <nav
-                  aria-label="Páginas de candidatos"
-                  className="flex items-center gap-3"
-                >
-                  <button
-                    className="action-button"
-                    aria-label="Página anterior"
-                    disabled={safePage === 0}
-                    onClick={() => setPage(safePage - 1)}
-                  >
-                    <ChevronLeft className="size-4" />
-                  </button>
-                  <span className="text-sm">
-                    {safePage + 1} / {pages}
-                  </span>
-                  <button
-                    className="action-button"
-                    aria-label="Próxima página"
-                    disabled={safePage + 1 >= pages}
-                    onClick={() => setPage(safePage + 1)}
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
-                </nav>
-              </div>
-            </section>
+            <MemoElectionCharts result={result} />
+            <CandidateTable key={queryKey} result={result} />
             <div className="mt-5 space-y-2 text-sm text-muted-foreground">
               {result.sources ? (
                 <div>
@@ -718,13 +658,7 @@ export default function Page() {
                   representam o resultado da eleição.
                 </p>
               )}
-              <p>
-                {result.region
-                  ? "Soma calculada pelo painel a partir dos arquivos oficiais das UFs. Percentuais sobre os votos válidos da região; seções totalizadas sobre o total de seções. Arquivos podem ter horários diferentes. Este recorte não determina a situação eleitoral dos candidatos."
-                  : result.municipality
-                    ? "Votação registrada nesta cidade para os cargos das eleições gerais. A classificação municipal não determina quem foi eleito; a disputa é estadual ou nacional."
-                    : "Percentuais e situações reproduzem o TSE. A ordem por votos não determina eleitos para cargos proporcionais."}
-              </p>
+              <p>{resultDisclaimer(result)}</p>
               {selectedOffice === "5" && (
                 <p>
                   Senador: duas vagas em 2026. A votação para o cargo não
@@ -733,7 +667,8 @@ export default function Page() {
               )}
             </div>
           </>
-        ) : (
+        )}
+        {!loading && !result && (
           <section className="rounded-lg border border-dashed bg-white p-10 text-center">
             <Vote className="mx-auto mb-4 size-9 text-[#075536]" />
             <h3 className="text-lg font-semibold">Aguardando dados da fonte</h3>
@@ -753,3 +688,154 @@ export default function Page() {
     </div>
   );
 }
+
+const CandidateTable = memo(function CandidateTable({
+  result,
+}: {
+  result: Result;
+}) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const searchIndex = useMemo(
+    () =>
+      result.candidates.map((candidate) => ({
+        candidate,
+        text: `${candidate.name} ${candidate.party} ${candidate.number}`.toLocaleLowerCase("pt-BR"),
+      })),
+    [result.candidates],
+  );
+  const filtered = useMemo(() => {
+    if (!search) return result.candidates;
+    const term = search.toLocaleLowerCase("pt-BR");
+    const matches: Result["candidates"] = [];
+    for (const { candidate, text } of searchIndex) {
+      if (text.includes(term)) matches.push(candidate);
+    }
+    return matches;
+  }, [result.candidates, searchIndex, search]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 20));
+  const safePage = Math.min(page, pages - 1);
+  const visible = filtered.slice(safePage * 20, safePage * 20 + 20);
+
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b p-5">
+        <div>
+          <h3 className="text-lg font-bold">Candidaturas</h3>
+          <p className="text-sm text-muted-foreground">
+            {result.candidates.length} candidatos · {number(result.seats)}{" "}
+            {result.seats === 1 ? "vaga" : "vagas"}
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+          <input
+            id="candidate-search"
+            aria-label="Buscar candidato, partido ou número"
+            className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+            placeholder="Nome, partido ou número"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-slate-50">
+            <TableHead className="pl-5">Candidato / partido</TableHead>
+            <TableHead className="text-right">Votos</TableHead>
+            <TableHead className="pr-5 text-right">
+              {result.region ? "% na região" : "% TSE"}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {visible.map((c) => (
+            <TableRow key={c.id}>
+              <TableCell className="min-w-60 py-4 pl-5">
+                <div className="flex items-start gap-3">
+                  <CandidatePhoto
+                    key={`${result.election}:${c.id}`}
+                    name={c.name}
+                    url={c.photoUrl}
+                  />
+                  <div className="min-w-0">
+                    <p className="whitespace-normal font-semibold">{c.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {c.party} · {c.number}
+                    </p>
+                    {c.status && (
+                      <p
+                        className={`mt-1 whitespace-normal text-sm ${c.elected ? "font-semibold text-green-800" : "text-muted-foreground"}`}
+                      >
+                        {c.status}
+                      </p>
+                    )}
+                    {c.destination && (
+                      <p className="mt-1 whitespace-normal text-sm text-muted-foreground">
+                        {c.destination}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-right font-medium tabular-nums">
+                {number(c.votes)}
+              </TableCell>
+              <TableCell className="pr-5 text-right">
+                <span className="font-semibold tabular-nums">
+                  {percent(c.percent)}
+                </span>
+                <div
+                  aria-hidden="true"
+                  className="mt-2 ml-auto h-1 w-16 overflow-hidden rounded-full bg-green-100 sm:w-28"
+                >
+                  <div
+                    className="h-full bg-[#098552]"
+                    style={{ width: `${Math.min(100, c.percent ?? 0)}%` }}
+                  />
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {!visible.length && (
+        <p className="p-8 text-center text-muted-foreground">
+          {search
+            ? "Nenhum candidato corresponde à busca."
+            : "Nenhuma candidatura disponível neste arquivo."}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4">
+        <p className="text-sm text-muted-foreground">
+          {filtered.length
+            ? `${safePage * 20 + 1}–${Math.min((safePage + 1) * 20, filtered.length)} de ${filtered.length}`
+            : "0 candidatos"}
+        </p>
+        <nav aria-label="Páginas de candidatos" className="flex items-center gap-3">
+          <button
+            className="action-button"
+            aria-label="Página anterior"
+            disabled={safePage === 0}
+            onClick={() => setPage(safePage - 1)}
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="text-sm">{safePage + 1} / {pages}</span>
+          <button
+            className="action-button"
+            aria-label="Próxima página"
+            disabled={safePage + 1 >= pages}
+            onClick={() => setPage(safePage + 1)}
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </nav>
+      </div>
+    </section>
+  );
+});
