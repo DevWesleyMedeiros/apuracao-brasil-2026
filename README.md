@@ -21,6 +21,9 @@ O **Apuração Brasil** nasceu como um projeto independente e open-source para d
 
 ## O que está implementado
 
+- Seleção explícita de primeiro turno ou segundo turno presidencial; sem troca automática de turno.
+- `/projecao`, metodologia e API `/api/forecast?mode=pre`, com estados vazios auditáveis; motor live e probabilidades públicas desabilitados por padrão. Sem dados reais revisados não há números de exemplo. Veja [operação, contratos e critérios de ativação](docs/forecast/OPERACAO.md).
+
 - Presidência: resultado nacional **incluindo o exterior**, resultado por UF e resultado somente do exterior (ZZ).
 - Governador, senador, deputado federal e deputado estadual: resultados da UF selecionada, entre os 26 estados.
 - Distrito Federal: deputado **distrital**, cargo 8, no lugar de deputado estadual.
@@ -30,7 +33,7 @@ O **Apuração Brasil** nasceu como um projeto independente e open-source para d
 - Situações e percentuais reproduzidos do TSE. A ordenação por votos não define eleitos para cargos proporcionais.
 - Senador: número de vagas vindo do TSE; duas vagas na eleição de 2026.
 
-O recorte geográfico é UF, nacional ou exterior agregado. Esta versão não inclui filtros de município, país ou cidade do exterior, histórico persistido ou comparação entre turnos.
+O recorte inclui municípios eleitorais, UFs, regiões presidenciais, nacional e exterior agregado. Não há país/cidade do exterior, comparação de resultados entre turnos nem histórico persistido automático.
 
 ## 🛠️ Stack Tecnológica e Arquitetura
 
@@ -40,10 +43,10 @@ O projeto foi arquitetado com foco em **performance**, **tipagem segura**, **fac
 
 | Tecnologia | Versão | Propósito no Projeto |
 | --- | --- | --- |
-| **Next.js** | 15+ (App Router) | Framework fullstack React que combina renderização no servidor (SSR/SSG), rotas de API (Route Handlers) e otimizações automáticas de performance. Elimina a necessidade de um backend separado. |
+| **Next.js** | 16.3.4 (App Router) | UI e Route Handlers, com alvo alternativo Vinext/Workers. |
 | **React** | 19 | Biblioteca para construção de interfaces de usuário modernas e interativas, com suporte a Hooks, Server Components e Client Components. |
 | **TypeScript** | 5+ | Tipagem estática para prevenir erros em tempo de desenvolvimento, garantir contratos de dados e melhorar a legibilidade do código. |
-| **Tailwind CSS** | 3+ | Framework CSS utilitário para estilização rápida, consistente e responsiva, com tema customizado nas cores oficiais do Brasil (verde, amarelo e azul). |
+| **Tailwind CSS** | 4.2.1 | Estilos utilitários responsivos e acessíveis. |
 | **Zod** | 3+ | Validação e parsing de dados em tempo de execução para garantir que os arquivos recebidos do TSE estejam no formato esperado, rejeitando dados corrompidos ou de outras eleições. |
 | **Node.js** | 22.13 LTS | Runtime de execução JavaScript no servidor, compatível com todas as funcionalidades do Next.js e bibliotecas usadas. |
 
@@ -52,7 +55,7 @@ O projeto foi arquitetado com foco em **performance**, **tipagem segura**, **fac
 - **Sem backend separado**: Os Route Handlers do Next.js (pasta `app/api/`) atuam como camada de API, fazendo a ponte entre o navegador e as APIs públicas do TSE. Isso reduz complexidade e custos de infraestrutura.
 - **Server Components + Client Components**: Componentes de exibição de dados são renderizados no servidor para performance, enquanto interações do usuário (busca, filtros, paginação) usam Client Components.
 - **Cache em múltiplas camadas**: Implementado tanto no servidor (memória) quanto via cabeçalhos HTTP para CDNs, evitando sobrecarga nas APIs do TSE e garantindo resposta rápida.
-- **Sem banco de dados obrigatório**: Os dados são consumidos diretamente das fontes oficiais e armazenados temporariamente em cache. O PostgreSQL é opcional para futuras funcionalidades de histórico persistido.
+- **Sem banco de dados obrigatório**: Dados oficiais em cache; D1 opcional no repositório, não provisionado para projeções. Não há PostgreSQL nesta feature.
 
 > ⚠️ **Nota**: Para executar o projeto localmente, use sempre os scripts com sufixo `*:next` (ex: `dev:next`, `build:next`). Os scripts sem sufixo são destinados à versão hospedada em plataforma edge (Vinext/Workers), não recomendada para desenvolvimento local.
 
@@ -93,7 +96,7 @@ apuracao-brasil-2026/
 | `app/page.tsx` | Componente principal da interface: gerencia estado global de filtros (UF, cidade, cargo, região), busca por candidatos, paginação (20 por página), atualização automática (60s) e manual, exibição de gráficos, tratamento de erros e estados de carregamento. |
 | `app/api/results/route.ts` | Ponto de entrada da API: recebe parâmetros de consulta (`uf`, `office`, `region`, `municipality`), valida com Zod, chama as funções do `lib/tse.ts`, agrega dados regionais/municipais, aplica normalização e retorna uma resposta padronizada com cabeçalhos de cache. |
 | `lib/catalog.ts` | Fonte da verdade para dados estáticos: lista de UFs com códigos e nomes, regiões (Sul, Sudeste, Norte, Nordeste, Centro-Oeste), cargos (presidente, governador, senador, etc.) com seus códigos oficiais do TSE e tipos TypeScript compartilhados por toda a aplicação. |
-| `lib/election.ts` | Coração da lógica eleitoral: descobre automaticamente o ciclo eleitoral atual (ex: `ele2026`), data e turno a partir da configuração pública do TSE; constrói URLs corretas para cada combinação de cargo/UF/município; define esquemas Zod para validar a estrutura dos arquivos de resultado; normaliza dados brutos do TSE em um formato consumível pela UI. |
+| `lib/election.ts` | Resolve código na configuração oficial para ciclo/data/turno/cargo explicitamente selecionados (padrão: primeiro turno); valida e normaliza os resultados do território solicitado. Nunca muda para o turno mais recente. |
 | `lib/tse.ts` | Integração robusta com a fonte oficial: implementa cliente HTTP com timeout (12s por arquivo), cache em memória com TTL configurado (1h para configuração, 30s para resultados), validação condicional via ETag para evitar downloads desnecessários, deduplicação de requisições simultâneas, retry com backoff exponencial (60s a 10min) para falhas e fallback para a última resposta válida com aviso de dados antigos. |
 | `app/globals.css` | Arquivo de estilos globais: importação do Tailwind, definição de variáveis CSS para o tema (verde, amarelo, azul), customização de tipografia e estilos de componentes padrão (botões, inputs, tabelas). |
 | `scripts/test-election.mjs` | Ferramenta de desenvolvimento: simula a construção de URLs e validação de parâmetros sem acessar o TSE, útil para testar mudanças na lógica eleitoral rapidamente. |
@@ -129,7 +132,7 @@ Antes de consultar resultados, o sistema verifica se já tem a **configuração 
 - Cache de 1 hora por instância de servidor
 - A configuração contém: ciclo eleitoral (ex: `ele2026`), data do turno (ex: `04/10/2026`), número do turno (1 ou 2) e códigos de eleição por tipo de cargo (ex: 6257 para presidente, 6259 para cargos estaduais em 2026)
 
-Isso garante que o sistema se adapta automaticamente a diferentes eleições/turnos sem hardcoded de códigos antigos.
+O código é descoberto para ciclo/data/turno/cargo exatos. O padrão continua no primeiro turno; segundo turno é explícito, nunca selecionado por ser mais recente.
 
 ### 4. Construção da URL e Consulta ao TSE (`lib/tse.ts`)
 
@@ -151,7 +154,7 @@ O cliente HTTP do `lib/tse.ts` aplica uma série de controles de qualidade e res
 - **Timeout**: 12 segundos por requisição (incluindo leitura do corpo da resposta)
 - **Validação ETag**: Envia o cabeçalho `If-None-Match` com a ETag da última resposta válida; se o TSE retornar 304 (Not Modified), usa os dados em cache sem baixar novamente
 - **Deduplicação**: Requisições idênticas simultâneas são agrupadas em uma única chamada ao TSE, evitando sobrecarga
-- **Rate Limit**: Até 4 requisições por segundo por instância de servidor para a API do TSE
+- **Espaçamento conservador do app**: até 4 novas consultas por segundo por instância, não o teto oficial nem garantia de limite global. O parecer técnico registra teto oficial de 100 req/s/IP; mantemos a política conservadora.
 - **Retry com Backoff**: Em caso de falhas (5xx, timeout, erros de rede), tenta novamente com espera crescente (60s → 2min → 5min → 10min) para não agravar instabilidades
 - **Validação de Integridade**: Após receber o arquivo, o Zod valida que:
   - É o turno e eleição corretos (não aceita simulados ou eleições passadas)
@@ -204,21 +207,21 @@ Não precisa de conta no TSE, chave de API, arquivo `.env` ou banco de dados. Pr
 Extraia o ZIP, abra um terminal dentro da pasta `apuracao-brasil-2026` (onde está `package.json`) e execute:
 
 ```sh
-npm install
+pnpm install --frozen-lockfile
 ```
 
-O repositório da versão hospedada preserva seu `pnpm-lock.yaml`. O caminho com npm é para facilitar a instalação local e gera `package-lock.json`. Se preferir manter exatamente o gerenciador e as versões travadas, instale pnpm e execute `pnpm install --frozen-lockfile`; os scripts podem ser chamados com `pnpm run`.
+Use pnpm 11.25.0 e preserve `pnpm-lock.yaml`; não gere outro lockfile.
 
 ### 3. Iniciar com Next.js
 
 ```sh
-npm run dev:next
+pnpm dev:next
 ```
 
 Abra (<http://localhost:3000>). Para usar outra porta:
 
 ```sh
-npm run dev:next -- --port 3001
+pnpm dev:next --port 3001
 ```
 
 Interrompa com Ctrl+C.
@@ -234,10 +237,11 @@ Interrompa com Ctrl+C.
 ### 5. Verificar e executar a versão de produção local
 
 ```sh
-npm run typecheck
-npm test
-npm run build:next
-npm run start:next
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm build:next
+pnpm start:next
 ```
 
 `start:next` exige que `build:next` tenha terminado com sucesso. Este caminho usa servidor Node.js. `npm run build` e `npm start` são os scripts da versão Vinext/Workers para Sites, não o caminho recomendado para começar localmente.
@@ -355,23 +359,8 @@ O projeto irá evoluir. Abaixo, funcionalidades planejadas para versões futuras
 
 ### 2. 📊 Sistema de Projeção Estatística para Segundo Turno
 
-**Status**: Em estudo de viabilidade técnica  
-**Contexto atual**: O painel exibe resultados oficiais em tempo real, mas não oferece projeções ou estimativas de resultado futuro para o segundo turno.  
-**O que será implementado**:
-- **Base de dados históricos**: Compilar dados de eleições passadas (2014, 2018, 2022) incluindo:
-  - Votos no primeiro turno vs segundo turno por candidato/partido
-  - Taxa de rejeição (votos nulos/brancos) e abstenção por turno
-  - Perfil demográfico por UF/município (faixa etária, escolaridade, renda)
-  - Resultados de pesquisas eleitorais de institutos confiáveis (Datafolha, Ibope, Ipec, etc.) com data de coleta e margem de erro
-  - Transferência de votos de candidatos eliminados no primeiro turno para os dois finalistas
-- **Modelos estatísticos e de Machine Learning**: Implementar múltiplos algoritmos de projeção para comparar resultados e calcular intervalos de confiança:
-  - **Modelo de tendência histórica**: Baseado na taxa média de transferência de votos entre turnos nas últimas eleições por partido/ideologia
-  - **Modelo de regressão**: Regressão linear/múltipla considerando variáveis como desempenho no primeiro turno, perfil demográfico da região e resultados de pesquisas recentes
-  - **Simulação Monte Carlo**: Gerar milhares de cenários aleatórios com base nas distribuições de votos e margens de erro, para calcular a **probabilidade de vitória** de cada candidato (ex: Candidato A: 62%, Candidato B: 38%)
-  - **Modelo de migração de votos**: Analisar alianças partidárias no segundo turno e histórico de transferência de votos de candidatos do mesmo espectro ideológico
-- **Integração com a apuração em tempo real**: À medida que os votos do segundo turno são totalizados, os modelos são atualizados automaticamente, refinando as projeções e reduzindo os intervalos de confiança.
-- **Transparência metodológica**: Página exclusiva explicando cada modelo, fontes de dados, limitações e margens de erro. **Nenhuma projeção será apresentada como fato absoluto** — sempre com intervalo de confiança e comparação entre modelos.
-- **Visualizações interativas**: Gráficos de evolução das probabilidades ao longo do tempo, mapa de calor por UF com chances de vitória por estado e simulação de cenários (ex: "Se a abstenção cair 5% no Nordeste, como muda a projeção?").
-- **Benefício**: Usuários terão acesso a uma ferramenta analítica independente para entender as tendências da eleição, baseada em dados históricos e métodos estatísticos transparentes — sem viés editorial.
+**Status**: Software experimental implementado, sem dados/calibração que autorizem probabilidades públicas. Agregação pré-eleitoral, distribuição logit, histórico estrito, avaliação e scripts de snapshots estão separados da apuração oficial. Live desabilitado por padrão; sem coleta permanente ou ingestão contínua provisionada.
+
+Dados de produção começam vazios. Brancos, nulos e abstenção não medem rejeição. Transferência individual, ML/Kalman e mapas de probabilidade por UF ficam adiados. Intervalos não precisam diminuir monotonamente. Veja [operação e limitações](docs/forecast/OPERACAO.md) e [verificação](docs/forecast/VERIFICACAO.md).
 
 > 💡 **Contribuições**: Ideias, sugestões e contribuições de código são sempre bem-vindas! Abra uma Issue ou Pull Request no repositório para colaborar com o projeto.
