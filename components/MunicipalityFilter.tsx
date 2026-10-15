@@ -7,10 +7,12 @@ export function MunicipalityFilter({
   uf,
   value,
   onChange,
+  round = '1',
 }: {
   uf: string;
   value: string;
   onChange: (city: Municipality | null) => void;
+  round?: '1' | '2';
 }) {
   const [request, setRequest] = useState<{
     key: string;
@@ -18,10 +20,10 @@ export function MunicipalityFilter({
     error: string;
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const requestKey = `${uf}:${attempt}`;
+  const requestKey = `${uf}:${round}:${attempt}`;
   useEffect(() => {
     const controller = new AbortController();
-    void loadMunicipalities(uf, controller.signal)
+    void loadMunicipalities(uf, controller.signal, 30000, {round})
       .then((list) => {
         if (!controller.signal.aborted)
           setRequest({ key: requestKey, data: list, error: "" });
@@ -36,7 +38,7 @@ export function MunicipalityFilter({
           });
       });
     return () => controller.abort();
-  }, [uf, requestKey]);
+  }, [uf, requestKey, round]);
   const currentRequest = request?.key === requestKey ? request : null;
   const loading = currentRequest === null;
   const error = currentRequest?.error ?? "";
