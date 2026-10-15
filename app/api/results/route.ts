@@ -2,6 +2,7 @@ import { getResult, getRegionResult } from "@/lib/tse";
 import { withDeadline } from "@/lib/deadline";
 import { REGIONS } from "@/lib/catalog";
 import { querySelection } from "@/lib/election";
+import type { Round } from '@/lib/electoral-context';
 import {
   InvalidMunicipalityError,
   validateMunicipalityFilter,
@@ -10,10 +11,11 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const region = params.get("region");
   const municipality = params.get("municipality");
+  const round = (params.get('round') ?? '1') as Round;
   const uf = params.get("uf") ?? "br",
     office = params.get("office") ?? "1";
   try {
-    querySelection(uf, office);
+    querySelection(uf, office, { round });
     if (
       region &&
       (uf !== "br" || office !== "1" || !REGIONS.some((r) => r.code === region))
@@ -35,8 +37,8 @@ export async function GET(request: Request) {
     const result = await withDeadline(
       (signal) =>
         region
-          ? getRegionResult(region, signal)
-          : getResult(uf, office, signal, municipality ?? undefined),
+          ? getRegionResult(region, signal, { round })
+          : getResult(uf, office, signal, municipality ?? undefined, { round }),
       26000,
       request.signal,
     );

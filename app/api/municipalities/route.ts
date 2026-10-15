@@ -1,14 +1,16 @@
 import { getMunicipalities } from "@/lib/tse";
 import { STATES } from "@/lib/catalog";
 import { withDeadline } from "@/lib/deadline";
+import type { Round } from '@/lib/electoral-context';
 
 export async function GET(request: Request) {
   const uf = new URL(request.url).searchParams.get("uf") ?? "";
-  if (!STATES.some(([code]) => code === uf))
+  const round = new URL(request.url).searchParams.get('round') ?? '1';
+  if (!['1','2'].includes(round) || !STATES.some(([code]) => code === uf))
     return Response.json({ message: "UF inválida." }, { status: 400 });
   try {
     const list = await withDeadline(
-      (signal) => getMunicipalities(uf, signal),
+      (signal) => getMunicipalities(uf, signal, {round:round as Round}),
       26000,
       request.signal,
     );
