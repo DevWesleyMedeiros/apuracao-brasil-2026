@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import { args } from './forecast-cli.mjs';
+const options=args(['url']);
+const base=options.url??'http://127.0.0.1:3000';
+const url=new URL(base);
+if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new Error('Smoke permitido somente no servidor local.');
+for(const mode of ['pre','live']) {
+  const start=performance.now();
+  const response=await fetch(`${base}/api/forecast?mode=${mode}`,{signal:AbortSignal.timeout(10000)});
+  assert.equal(response.status,200);
+  const payload=await response.json();
+  assert.ok(mode==='live'?payload.state==='disabled':['no-data','disabled'].includes(payload.state));
+  assert.equal(payload.estimate,null);assert.equal(payload.publicProbabilityEnabled,false);assert.deepEqual(payload.candidates,[]);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  console.log(mode,payload.state,`${(performance.now()-start).toFixed(1)}ms HTTP local`);
+}
+for(const query of ['mode=pre&url=https://example.test','mode=pre&simulations=100','mode=pre&mode=live','mode=pre&asOf=2099-01-01','mode=pre&from=2026-10-10','mode=pre&asOf=2026-02-30']) {
+  const response=await fetch(`${base}/api/forecast?${query}`);assert.equal(response.status,400);assert.equal(response.headers.get('cache-control'),'no-store');
+}
+for(const query of ['uf=rs&office=5&round=2','uf=br&office=1&round=3','uf=ac&office=1&municipality=1120&round=2']) {
+  assert.equal((await fetch(`${base}/api/results?${query}`)).status,400);
+}
+for(const [route,text] of [['/projecao','Projeção estatística — não é resultado oficial'],['/projecao/metodologia','Metodologia'],['/','Turno da apuração']]) {
+  const response=await fetch(base+route);assert.equal(response.status,200);const html=await response.text();assert.ok(html.includes(text),route);assert.ok(html.includes('lang="pt-BR"'));
+}
+console.log('Passed: local API empty/disabled, null probabilities, strict parameters, round guards and HTML navigation/methodology. Browser interactions not covered.');
