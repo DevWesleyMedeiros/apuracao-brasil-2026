@@ -1,4 +1,5 @@
 "use client";
+import Link from 'next/link';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCheck,
@@ -139,6 +140,7 @@ function initialQuery(key: string): QueryState {
 const MemoElectionCharts = memo(ElectionCharts);
 
 export default function Page() {
+  const [round, setRound] = useState<'1' | '2'>('1');
   const [citySelection, setCitySelection] = useState<{
     uf: string;
     city: Municipality;
@@ -169,9 +171,10 @@ export default function Page() {
       ? nationalRegion
       : undefined;
   const selectedUf = scope === "state" ? uf : scopeUf[scope];
-  const selectedOffice = scope === "state" ? office : "1";
+  const selectedOffice = scope === "state" && round === '1' ? office : "1";
   const location = locationName(scope, uf, selectedRegion, selectedCity);
   const queryKey = JSON.stringify([
+    round,
     selectedUf,
     selectedOffice,
     selectedRegion,
@@ -197,6 +200,7 @@ export default function Page() {
           30000,
           selectedRegion,
           selectedMunicipality,
+          { round },
         );
         if (id !== sequence.current || ctrl.signal.aborted) return;
         const lastCheck = new Date().toLocaleTimeString("pt-BR", {
@@ -226,7 +230,7 @@ export default function Page() {
         if (id === sequence.current) busy.current = false;
       }
     },
-    [selectedUf, selectedOffice, selectedRegion, selectedMunicipality, queryKey],
+    [selectedUf, selectedOffice, selectedRegion, selectedMunicipality, queryKey, round],
   );
   const refresh = useCallback(() => {
     setQuery((current) => ({ ...current, loading: true, error: "" }));
@@ -244,6 +248,7 @@ export default function Page() {
     return () => clearInterval(timer);
   }, [auto, refresh]);
   const snapshot = useRef({
+    round,
     scope,
     municipality: selectedMunicipality,
     region: selectedRegion,
@@ -255,6 +260,7 @@ export default function Page() {
   });
   useEffect(() => {
     snapshot.current = {
+      round,
       scope,
       municipality: selectedMunicipality,
       region: selectedRegion,
@@ -265,6 +271,7 @@ export default function Page() {
       loading,
     };
   }, [
+    round,
     scope,
     selectedMunicipality,
     selectedRegion,
@@ -334,11 +341,17 @@ export default function Page() {
             </div>
           </div>
           <span className="rounded-full border border-white/25 px-3 py-1 text-sm">
-            1º turno · 04 out
+            {round === '1' ? '1º turno · 04 out' : '2º turno · 25 out'}
           </span>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 py-8">
+        <nav aria-label="Painéis" className="mb-5 flex gap-5"><Link href="/" aria-current="page" className="underline">Apuração oficial</Link><Link href="/projecao" className="underline">Projeção estatística</Link></nav>
+        <label className="mb-6 block font-semibold">Turno da apuração{' '}
+          <select className="ml-2 rounded border bg-white p-2" value={round} onChange={event => setRound(event.target.value as '1' | '2')}>
+            <option value="1">1º turno · 04/10/2026</option><option value="2">2º turno · 25/10/2026 · Presidente</option>
+          </select>
+        </label>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-5">
           <div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -476,8 +489,9 @@ export default function Page() {
                 </Select>
               </div>
               <MunicipalityFilter
-                key={uf}
+                key={`${uf}:${round}`}
                 uf={uf}
+                round={round}
                 value={selectedMunicipality ?? "all"}
                 onChange={(city) =>
                   setCitySelection(city ? { uf, city } : null)
@@ -491,7 +505,7 @@ export default function Page() {
                 >
                   Cargo
                 </label>
-                <Select value={office} onValueChange={setOffice}>
+                <Select value={round === '2' ? '1' : office} onValueChange={setOffice}>
                   <SelectTrigger
                     id="office"
                     aria-labelledby="office-label"
@@ -500,7 +514,7 @@ export default function Page() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper">
-                    {OFFICES.map(([code, name]) => (
+                    {OFFICES.filter(([code]) => round === '1' || code === '1').map(([code, name]) => (
                       <SelectItem key={code} value={code}>
                         {code === "7" ? officeName(code, uf) : name}
                       </SelectItem>
@@ -683,7 +697,7 @@ export default function Page() {
       </main>
       <footer className="mx-auto mt-4 max-w-6xl border-t px-5 py-6 text-sm text-muted-foreground">
         Painel independente, sem vínculo com a Justiça Eleitoral. Dados públicos
-        do TSE · 1º turno de 2026.
+        do TSE · {round}º turno de 2026.
       </footer>
     </div>
   );
