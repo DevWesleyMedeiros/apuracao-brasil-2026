@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { testForecast } from './test-forecast.mjs';
 
 // Compile the actual domain modules; no extra test runner or network required.
 const dir=fs.mkdtempSync(path.join(process.cwd(),'.election-tests-'));
 try {
-  for(const name of ['catalog','election','tse','chart-data','deadline','result-client','regional','municipal']) {
+  for(const name of ['catalog','election','tse','chart-data','deadline','result-client','regional','municipal','electoral-context']) {
     const source=fs.readFileSync(`lib/${name}.ts`,'utf8');
     const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText.replaceAll("'./catalog'","'./catalog.mjs'").replaceAll("'./election'","'./election.mjs'").replaceAll("'./deadline'","'./deadline.mjs'").replaceAll("'./regional'","'./regional.mjs'").replaceAll("'./municipal'","'./municipal.mjs'");
-    fs.writeFileSync(path.join(dir,`${name}.mjs`),output);
+    fs.writeFileSync(path.join(dir,`${name}.mjs`),output.replace(/(['"])(\.\/[^'"]+?)(?:\.mjs)?\1/g, (_, quote, name) => `${quote}${name}.mjs${quote}`));
   }
   const {normalizeResult,resolveElection,resultUrl,querySelection,candidatePhotoUrl}=await import(pathToFileURL(path.join(dir,'election.mjs')));
   const {REGIONS,statesInRegion,selectRegionUf}=await import(pathToFileURL(path.join(dir,'catalog.mjs')));
@@ -72,6 +72,7 @@ try {
   assert.equal(normalizeResult({...raw,and:'n'},'br','1','6257','x').state,'waiting');
   assert.equal(normalizeResult({...raw,tf:'s'},'br','1','6257','x').state,'finished');
   assert.equal(normalizeResult({...raw,dv:'n'},'br','1','6257','x').candidates[0].votes,null);
+  assert.deepEqual(normalizeResult({...raw,dv:'n'},'br','1','6257','x').votes,{valid:0,blank:0,null:0,legend:null});
   assert.throws(()=>normalizeResult({...raw,f:'s'},'br','1','6257','x'));
   assert.throws(()=>normalizeResult(raw,'zz','1','6257','x'));
   assert.throws(()=>normalizeResult({...raw,s:{...raw.s,st:'NaN'}},'br','1','6257','x'));
@@ -82,6 +83,14 @@ try {
   assert.equal(resolveElection(config,'6'),'6259');
   assert.equal(resultUrl('zz','1','6257'),'https://resultados.tse.jus.br/oficial/ele2026/6257/dados/zz/zz-c0001-e006257-u.json');
   assert.throws(()=>resolveElection({...config,f:'s'},'1'));
+  const secondConfig={...config,pl:[...config.pl,{c:'ele2026',dt:'25/10/2026',e:[{cd:'6258',t:'2',abr:[{cp:[{cd:'1'}]}]}]}]};
+  assert.equal(resolveElection(secondConfig,'1',{round:'2'}),'6258');
+  assert.throws(()=>resolveElection({...config,pl:[...config.pl,...config.pl]},'1'));
+  assert.throws(()=>querySelection('rs','5',{round:'2'}));
+  assert.throws(()=>normalizeResult({...raw,t:'2'},'br','1','6257','x'));
+  assert.throws(()=>normalizeResult(raw,'br','1','6257','x',undefined,{round:'2'}));
+  assert.equal(normalizeResult({...raw,t:'2',ele:'6258'},'br','1','6258','x',undefined,{round:'2'}).round,'2');
+  assert.throws(()=>aggregateRegion('sul',stateResults.map((r,i)=>i===2?{...r,round:'2'}:r)));
   const {electionChartData}=await import(pathToFileURL(path.join(dir,'chart-data.mjs')));
   assert.equal(electionChartData(withheld),null);
   assert.equal(electionChartData(south).candidates[0].votes,300);
@@ -152,6 +161,24 @@ try {
     await assert.rejects(getCityResult('rs','1',undefined,'01120'),InvalidMunicipalityError);
     assert.equal(municipalCalls,countBefore,'wrong-UF code must not fetch a non-existent result');
   } finally {globalThis.fetch=cityFetch;}
+  const {getResult:getTurnResult,getRegionResult:getTurnRegion}=await import(pathToFileURL(path.join(dir,'tse.mjs'))+'?turn-isolation');
+  const turnFetch=globalThis.fetch;
+  let rejectSecond=false;
+  globalThis.fetch=async url=>{
+    if(String(url).includes('ele-c.json'))return Response.json(secondConfig);
+    const uf=String(url).split('/dados/')[1].split('/')[0];
+    const second=String(url).includes('/6258/');
+    if(second&&rejectSecond)throw new Error('turn two unavailable');
+    return Response.json({...raw,ele:second?'6258':'6257',t:second?'2':'1',cdabr:uf,tpabr:uf==='br'?'br':'uf'});
+  };
+  try {
+    assert.equal((await getTurnResult('br','1')).round,'1');
+    assert.equal((await getTurnRegion('sul')).round,'1');
+    rejectSecond=true;
+    await assert.rejects(getTurnResult('br','1',undefined,undefined,{round:'2'}));
+    await assert.rejects(getTurnRegion('sul',undefined,{round:'2'}));
+    assert.equal((await getTurnResult('br','1')).round,'1');
+  }finally{globalThis.fetch=turnFetch;}
   const {withDeadline,RequestTimeoutError}=await import(pathToFileURL(path.join(dir,'deadline.mjs')));
   const {loadElectionResult,loadMunicipalities}=await import(pathToFileURL(path.join(dir,'result-client.mjs')));
   await assert.rejects(withDeadline(()=>new Promise(()=>{}),15),RequestTimeoutError,'even a transport ignoring abort must end');
@@ -197,4 +224,5 @@ try {
     assert.equal((await independent('br','1')).candidates[0].votes,1234);
   } finally {globalThis.fetch=savedFetch;}
   console.log('Passed: municipal lists, leading zeros, territory validation, city completion, cache separation, city client deadlines, complete regional aggregation, weighted percentages, incomplete/hidden guards, regional charts, five-region UF coverage, region transitions, presidential/state photo paths and guards, chart categories, empty/hidden charts, top-six sorting, section totals, parsing, official/turn/territory guards, DF, URL formatting, hidden votes, request isolation, client/server deadlines, hung body, cancellation, ETag, stale data, backoff and recovery.');
+  await testForecast(dir);
 } finally {fs.rmSync(dir,{recursive:true,force:true});}
