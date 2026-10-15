@@ -25,7 +25,7 @@ export function aggregateRegion(code: string, results: Result[]): Result {
     if (results.length !== region.states.length || byUf.size !== region.states.length ||
         !region.states.every(uf => byUf.has(uf))) throw new Error('Consulta regional incompleta. Tente novamente.');
     const first = results[0];
-    if (results.some(r => r.office !== '1' || r.election !== first.election || r.stale))
+    if (results.some(r => r.office !== '1' || r.election !== first.election || r.round !== first.round || r.context.cycle !== first.context.cycle || r.context.electionDate !== first.context.electionDate || r.municipality || r.stale))
         throw new Error('Os arquivos da região precisam ser da mesma eleição e consulta atual.');
     const ids = new Set(first.candidates.map(c => c.id));
     if (results.some(result => !matchesCandidateIds(result, ids, ids.size)))
@@ -43,6 +43,7 @@ export function aggregateRegion(code: string, results: Result[]): Result {
             status: '', destination: '', elected: false };
     }).sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0) || a.name.localeCompare(b.name, 'pt-BR'));
     return { ...first, uf: `region:${region.code}`, region: region.code, sourceUrl: 'https://resultados.tse.jus.br/',
+        context: {...first.context, territory: `region:${region.code}`, scope: 'region'},
         generatedAt: '', totalizedAt: null, checkedAt: new Date().toISOString(), candidates,
         state: hidden ? 'withheld' : results.every(r => r.state === 'finished') ? 'finished' : results.every(r => r.state === 'waiting') ? 'waiting' : 'partial',
         sections: { total, count, percent: total ? count / total * 100 : 0 },
