@@ -4,7 +4,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Apuração Brasil · Eleições 2026',
   description:
-    'Acompanhe o primeiro turno das eleições de 2026. Dados públicos do TSE por cargo, estado e exterior.',
+    'Acompanhe os turnos das eleições de 2026. Apuração oficial do TSE e projeção estatística claramente separadas.',
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
