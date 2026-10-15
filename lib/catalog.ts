@@ -9,7 +9,7 @@ export const REGIONS = [
 ] as const;
 export type RegionCode = 'all' | typeof REGIONS[number]['code'];
 export type Municipality = { code: string; name: string };
-export type MunicipalityList = { uf: string; election: string; sourceUrl: string; municipalities: Municipality[] };
+export type MunicipalityList = { uf: string; round: import('./electoral-context').Round; election: string; sourceUrl: string; municipalities: Municipality[] };
 export function statesInRegion(region: RegionCode) {
     if (region === 'all') return [...STATES];
     const selected = REGIONS.find(r => r.code === region);
@@ -32,6 +32,8 @@ export type Candidate = {
     photoUrl: string | null;
 };
 export type Result = {
+    round: import('./electoral-context').Round;
+    context: import('./electoral-context').ElectoralContext;
     office: string;
     uf: string;
     title: string;
