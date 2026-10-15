@@ -15,6 +15,7 @@ import {
   validateMunicipalityFilter,
 } from "./municipal";
 import { aggregateRegion } from "./regional";
+import { electionSelection, type ElectionOptions } from './electoral-context';
 type Entry = {
   data?: unknown;
   etag?: string;
@@ -56,6 +57,24 @@ function removeExpiredFailures(now: number) {
 }
 
 let nextFetchAt = 0;
+export class TseHttpError extends Error {
+  constructor(public status: number, public retryAfter: string | null) { super(`TSE HTTP ${status}${retryAfter ? `; Retry-After: ${retryAfter}` : ''}`); }
+}
+// Manual collectors need the original bytes for audit hashes. Same pacing/deadline as app reads.
+export async function downloadTseFile(url: string, signal?: AbortSignal) {
+  if (!url.startsWith('https://resultados.tse.jus.br/oficial/')) throw new Error('Fonte não permitida.');
+  const reservedAt = Math.max(Date.now(), nextFetchAt);
+  nextFetchAt = reservedAt + 250;
+  return withDeadline(async requestSignal => {
+    await waitForSlot(Math.max(0, reservedAt - Date.now()), requestSignal);
+    const response = await fetch(url, { signal: requestSignal });
+    if (!response.ok) throw new TseHttpError(response.status, response.headers.get('retry-after'));
+    const rawBytes = new Uint8Array(await response.arrayBuffer());
+    let rawText = '', data: unknown = null, parseError = false;
+    try { rawText = new TextDecoder('utf-8', {fatal:true}).decode(rawBytes); data = JSON.parse(rawText) as unknown; } catch { parseError = true; }
+    return { rawBytes, rawText, data, parseError, url, fetchedAt: new Date().toISOString() };
+  }, 12000, signal);
+}
 function waitForSlot(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
@@ -73,7 +92,7 @@ function waitForSlot(ms: number, signal: AbortSignal) {
     signal.addEventListener("abort", abort, { once: true });
   });
 }
-async function cachedJson(url: string, ttl: number, signal?: AbortSignal) {
+export async function cachedJson(url: string, ttl: number, signal?: AbortSignal) {
   const now = Date.now();
   removeExpiredFailures(now);
   const entry = getLru(cache, url);
@@ -156,26 +175,29 @@ const lastRegion = new Map<string, Result>();
 export async function getRegionResult(
   code: string,
   signal?: AbortSignal,
+  options: ElectionOptions = {},
 ): Promise<Result> {
   const region = REGIONS.find((r) => r.code === code);
   if (!region) throw new Error("Região inválida.");
+  const selection = electionSelection(options);
+  const config = await cachedJson(CONFIG_URL, 3600000, signal);
+  const election = resolveElection(config, "1", options);
+  const key = JSON.stringify({ ...selection, election, office: '1', region: code });
   try {
-    const config = await cachedJson(CONFIG_URL, 3600000, signal);
-    const election = resolveElection(config, "1");
     // Only completed JSON is shared; all promises remain local to this request.
     const results = await Promise.all(
       region.states.map(async (uf) => {
         const url = resultUrl(uf, "1", election);
         const raw = await cachedJson(url, 30000, signal);
-        return normalizeResult(raw, uf, "1", election, url);
+        return normalizeResult(raw, uf, "1", election, url, undefined, options);
       }),
     );
     const result = aggregateRegion(code, results);
-    setLru(lastRegion, code, result, REGION_MAX_ENTRIES);
+    setLru(lastRegion, key, result, REGION_MAX_ENTRIES);
     return result;
   } catch (error) {
     if (signal?.aborted) throw error;
-    const previous = getLru(lastRegion, code);
+    const previous = getLru(lastRegion, key);
     if (previous)
       return {
         ...previous,
@@ -190,16 +212,18 @@ const lastGood = new Map<string, Result>();
 export async function getMunicipalities(
   uf: string,
   signal?: AbortSignal,
+  options: ElectionOptions = {},
+  resolvedElection?: string,
 ): Promise<MunicipalityList> {
   querySelection(uf, "1");
   if (uf === "br" || uf === "zz")
     throw new InvalidMunicipalityError("Selecione uma UF brasileira.");
-  const config = await cachedJson(CONFIG_URL, 3600000, signal);
-  const election = resolveElection(config, "1");
+  const election = resolvedElection ?? resolveElection(await cachedJson(CONFIG_URL, 3600000, signal), "1", options);
   const sourceUrl = municipalityConfigUrl(election);
   const raw = await cachedJson(sourceUrl, 3600000, signal);
   return {
     uf,
+    round: electionSelection(options).round,
     election,
     sourceUrl,
     municipalities: normalizeMunicipalities(raw, uf),
@@ -210,15 +234,17 @@ export async function getResult(
   rawOffice: string,
   signal?: AbortSignal,
   municipalityCode?: string,
+  options: ElectionOptions = {},
 ): Promise<Result> {
-  const { uf, office } = querySelection(rawUf, rawOffice);
+  const { uf, office } = querySelection(rawUf, rawOffice, options);
   if (municipalityCode) validateMunicipalityFilter(uf, municipalityCode);
-  const key = `${uf}:${office}:${municipalityCode ?? ""}`;
+  const selection = electionSelection(options);
+  const config = await cachedJson(CONFIG_URL, 3600000, signal);
+  const election = resolveElection(config, office, options);
+  const key = JSON.stringify({ ...selection, election, uf, office, municipalityCode });
   try {
-    const config = await cachedJson(CONFIG_URL, 3600000, signal);
-    const election = resolveElection(config, office);
     const municipality = municipalityCode
-      ? (await getMunicipalities(uf, signal)).municipalities.find(
+      ? (await getMunicipalities(uf, signal, options, office === '1' ? election : undefined)).municipalities.find(
           (c) => c.code === municipalityCode,
         )
       : undefined;
@@ -228,7 +254,7 @@ export async function getResult(
       );
     const url = resultUrl(uf, office, election, municipalityCode);
     const raw = await cachedJson(url, 30000, signal);
-    const data = normalizeResult(raw, uf, office, election, url, municipality);
+    const data = normalizeResult(raw, uf, office, election, url, municipality, options);
     setLru(lastGood, key, data, RESULT_MAX_ENTRIES);
     return data;
   } catch (error) {
