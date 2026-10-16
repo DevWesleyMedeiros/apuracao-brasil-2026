@@ -2,6 +2,7 @@ import { aggregate } from '../forecast/aggregate';
 import { history } from '../forecast/history';
 import { probabilityPermission } from '../forecast/quality';
 import { candidateSchema, contestSchema, timestamp, type ModelConfig } from '../forecast/types';
+import { supportsProductionContest } from '../forecast/production-context';
 
 export type ForecastMode = 'pre' | 'live';
 export type ForecastData = { polls: unknown[]; candidates: unknown[]; contest: unknown; evaluation: unknown; dataVersion: string };
@@ -36,7 +37,7 @@ export function buildForecast(input: {
     if (!flags.preEnabled) return unavailable('disabled', 'Agregador pré-eleitoral desabilitado.');
     if (timestamp(asOf) > timestamp(base.context.electionAt)) return unavailable('disabled', 'Pleito encerrado para previsões pré-eleitorais. Consulte um corte histórico identificado ou a apuração oficial.');
     if (!contest || !data.polls.length || candidates.length !== 2) return unavailable('no-data', 'Sem pesquisas revisadas e dupla de finalistas oficialmente verificada. Nenhuma estimativa foi inventada.');
-    if (contest.year !== 2026 || timestamp(contest.electionAt)!==timestamp('2026-10-25T17:00:00-03:00') || candidates.some((c, i) => c.id !== contest.candidateIds[i]) || candidates.some(c => timestamp(c.verifiedAt) > timestamp(asOf))) return unavailable('insufficient-data', 'Contexto ou identidades incompatíveis ou ainda não verificados neste corte.');
+    if (!supportsProductionContest(contest) || candidates.some((c, i) => c.id !== contest.candidateIds[i]) || candidates.some(c => timestamp(c.verifiedAt) > timestamp(asOf))) return unavailable('insufficient-data', 'Contexto ou identidades incompatíveis ou ainda não verificados neste corte.');
     try {
         const result = aggregate(data.polls, contest, asOf, config);
         if (!result) return unavailable('insufficient-data', 'Nenhuma pesquisa elegível no corte solicitado.');
