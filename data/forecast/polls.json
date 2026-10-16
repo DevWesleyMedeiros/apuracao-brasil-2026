@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "<identificador único>",
+    "registration": "<registro real, no formato BR-NNNNN/2026>",
+    "institute": "<nome padronizado do instituto>",
+    "mode": "<modalidade informada no relatório>",
+
+    "year": 2026,
+    "round": "2",
+    "office": "1",
+    "scope": "br",
+    "candidateIds": ["<id de A>", "<id de B>"],
+    "scenario": "<mesmo cenário de contest.json>",
+    "wave": "<identificador da rodada de coleta>",
+
+    "fieldStart": "<início do campo>",
+    "fieldEnd": "<fim do campo>",
+    "publishedAt": "<publicação>",
+    "reportUrl": "<URL do relatório>",
+    "registrationVerification": "<referência da conferência no PesqEle>",
+
+    "sampleSize": "<tamanho da amostra>",
+    "unit": "percent",
+    "denominator": "total",
+    "a": "<percentual de A sobre o total>",
+    "b": "<percentual de B sobre o total>",
+
+    "accessedAt": "<data de acesso>",
+    "curation": "pending",
+    "provenance": ["<URL da fonte>"]
+  }
+]

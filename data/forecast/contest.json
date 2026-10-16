@@ -1,1 +1,10 @@
-null
+{
+  "year": 2026,
+  "round": "2",
+  "office": "1",
+  "scope": "br",
+  "election": "<código oficial descoberto no TSE>",
+  "electionAt": "2026-10-25T17:00:00-03:00",
+  "candidateIds": ["<id confirmado de A>", "<id confirmado de B>"],
+  "scenario": "<identificador fixo do cenário>"
+}

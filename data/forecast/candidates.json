@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "<candidato 01 mesmo id usado em candidateIds>",
+    "name": "Flávio",
+    "sourceUrl": "<URL da fonte oficial>",
+    "verifiedAt": "<data ISO da verificação com fuso>"
+  },
+  {
+    "id": "< candidato 02 mesmo id usado em candidateIds>",
+    "name": "Lula",
+    "sourceUrl": "<URL da fonte oficial>",
+    "verifiedAt": "<data ISO da verificação com fuso>"
+  }
+]
