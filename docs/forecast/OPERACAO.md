@@ -57,6 +57,8 @@ Forecast exige `mode`. Só aceita `mode`, `asOf`, `from`, `to`, sem duplicatas, 
 
 Fonte dos contratos: `lib/forecast/types.ts`.
 
+Para preencher por interface visual exclusivamente local, execute `pnpm admin:pesquisas` e abra `http://127.0.0.1:4179`. Importação/edição em memória e exportação manual dos três JSONs, sem escrita no projeto ou publicação automática. Fluxo completo, limites e cuidados: [CURADORIA-LOCAL.md](CURADORIA-LOCAL.md).
+
 1. Obtenha relatório original; confira manualmente registro/divulgação no TSE. Regex não confirma existência/autorização. Notícia repetida não é nova pesquisa.
 2. Preencha `contest.json` conforme `contestSchema`: ano, turno 2, cargo 1, BR, eleição descoberta, horário do pleito com fuso, cenário e **dois ids confirmados em ordem fixa**. `candidates.json` exige id/nome real, fonte e data de verificação. Sem dupla confirmada, mantenha vazios.
 3. `polls.json`: id, registro TSE, instituto canônico, contratante quando disponível, modo, contexto/dupla/cenário/onda, datas de campo/publicação, relatório, referência da verificação do registro, amostra, unidade (`percent`/`proportion`), denominador (`total`/`valid`), A/B, brancos/nulos/indecisos quando publicados, n útil, margem/confiança quando publicados, acesso, curadoria e proveniência. Não invente opcionais.
