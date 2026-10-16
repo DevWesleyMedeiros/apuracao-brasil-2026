@@ -6,6 +6,9 @@ export function pollValues(poll: Poll) {
     const validFraction = (p.a + p.b) / scale;
     return { share: p.a / (p.a + p.b), nValid: p.denominator === 'total' ? p.sampleSize * validFraction : p.validSampleSize! };
 }
+export function pollMatchesContest(poll: Poll, contest: Contest): boolean {
+    return poll.year === contest.year && poll.round === contest.round && poll.office === contest.office && poll.scope === contest.scope && poll.scenario === contest.scenario && poll.candidateIds.every((id, i) => id === contest.candidateIds[i]);
+}
 export function selectPolls(input: unknown[], contestInput: Contest, asOf: string) {
     const contest = contestSchema.parse(contestInput), cutoff = timestamp(asOf);
     const parsed=input.map(p=>pollSchema.parse(p));
@@ -17,7 +20,7 @@ export function selectPolls(input: unknown[], contestInput: Contest, asOf: strin
         if(identities.has(p.id)&&identities.get(p.id)!==key)throw new Error('ID de pesquisa reutilizado.');
         curation.set(key,p.curation);identities.set(p.id,key);
     }
-    const eligible = parsed.filter(p => p.curation === 'reviewed' && p.year === contest.year && p.round === contest.round && p.office === contest.office && p.scope === contest.scope && p.scenario === contest.scenario && p.candidateIds.every((id, i) => id === contest.candidateIds[i]) && timestamp(p.fieldEnd) <= cutoff && timestamp(p.publishedAt) <= cutoff);
+    const eligible = parsed.filter(p => p.curation === 'reviewed' && pollMatchesContest(p, contest) && timestamp(p.fieldEnd) <= cutoff && timestamp(p.publishedAt) <= cutoff);
     const dedup = new Map<string, Poll>();
     for (const poll of eligible.sort((a, b) => a.id.localeCompare(b.id))) {
         const key = `${poll.registration}:${poll.scenario}:${poll.wave}`;
