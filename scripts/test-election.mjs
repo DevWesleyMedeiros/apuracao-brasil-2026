@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { testForecast } from './test-forecast.mjs';
+import { testCuration } from './test-curation.mjs';
 
 // Compile the actual domain modules; no extra test runner or network required.
 const dir=fs.mkdtempSync(path.join(process.cwd(),'.election-tests-'));
@@ -224,5 +225,5 @@ try {
     assert.equal((await independent('br','1')).candidates[0].votes,1234);
   } finally {globalThis.fetch=savedFetch;}
   console.log('Passed: municipal lists, leading zeros, territory validation, city completion, cache separation, city client deadlines, complete regional aggregation, weighted percentages, incomplete/hidden guards, regional charts, five-region UF coverage, region transitions, presidential/state photo paths and guards, chart categories, empty/hidden charts, top-six sorting, section totals, parsing, official/turn/territory guards, DF, URL formatting, hidden votes, request isolation, client/server deadlines, hung body, cancellation, ETag, stale data, backoff and recovery.');
-  await testForecast(dir);
+  await testCuration(await testForecast(dir));
 } finally {fs.rmSync(dir,{recursive:true,force:true});}
