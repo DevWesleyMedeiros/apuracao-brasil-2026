@@ -4,17 +4,17 @@ Branch mantida: `feat/second-round-forecast`. Árvore inicialmente limpa. Node 2
 
 ## Comandos e resultados reais
 
-| Comando | Resultado final |
-| --- | --- |
-| `pnpm test` | Passou, harness Node existente ampliado, sem rede TSE |
-| `pnpm lint` | Passou, sem erros/avisos |
-| `pnpm build` | Passou, Vinext/Vite/Workers; aviso informativo de classificação estática de páginas `?` |
-| `pnpm build:next` | Passou, Next 16.3.4; rotas `/`, `/projecao`, metodologia e três APIs geradas |
-| `pnpm typecheck` | Passou após o build Next final |
-| `git diff --check` | Passou |
-| `pnpm start:next --port 3001` + `node scripts/smoke-forecast.mjs --url http://127.0.0.1:3001` | Smoke API/HTML passou |
-| `pnpm start --port 8787` + `node scripts/smoke-forecast.mjs --url http://127.0.0.1:8787` | Smoke API/HTML passou em Wrangler local |
-| `node scripts/snapshot-turno1.mjs` sem argumentos | Recusou com uso esperado (exit 1); não houve coleta real |
+| Comando                                                                                       | Resultado final                                                                         |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `pnpm test`                                                                                   | Passou, harness Node existente ampliado, sem rede TSE                                   |
+| `pnpm lint`                                                                                   | Passou, sem erros/avisos                                                                |
+| `pnpm build`                                                                                  | Passou, Vinext/Vite/Workers; aviso informativo de classificação estática de páginas `?` |
+| `pnpm build:next`                                                                             | Passou, Next 16.3.4; rotas `/`, `/projecao`, metodologia e três APIs geradas            |
+| `pnpm typecheck`                                                                              | Passou após o build Next final                                                          |
+| `git diff --check`                                                                            | Passou                                                                                  |
+| `pnpm start:next --port 3001` + `node scripts/smoke-forecast.mjs --url http://127.0.0.1:3001` | Smoke API/HTML passou                                                                   |
+| `pnpm start --port 8787` + `node scripts/smoke-forecast.mjs --url http://127.0.0.1:8787`      | Smoke API/HTML passou em Wrangler local                                                 |
+| `node scripts/snapshot-turno1.mjs` sem argumentos                                             | Recusou com uso esperado (exit 1); não houve coleta real                                |
 
 Smoke verifica pré `no-data`, live `disabled`, estimativa null, candidaturas vazias, probabilidades públicas bloqueadas, `no-store`, parâmetros desconhecidos/repetidos/futuros inválidos, guardas de segundo turno/cargo/código municipal, HTML/navegação/aviso/metodologia em português. Não consulta arquivos reais do TSE.
 
@@ -22,7 +22,7 @@ Medição final HTTP local, incluindo transporte/inicialização: Next pré 625,
 
 ## Falhas encontradas e tratamento
 
-- **Preexistente:** primeiro `pnpm test` falhou com `ERR_MODULE_NOT_FOUND` de `tse.mjs` importando `election` sem extensão. Harness adaptava apenas aspas simples; corrigido para ambos os estilos, sem remover testes.
+- **Preexistente:** primeiro `pnpm test` falhou com `ERR_MODULE_NOT_FOUND` de `tse.mjs` importando `election` sem extensã. Corrigido para ambos os estilos, sem remover testes.
 - Typecheck inicial passou. Durante desenvolvimento, erros de tipagem novos em query/`raw` Zod foram corrigidos e os checks repetidos.
 - Uma execução paralela de lint/test falhou porque ESLint tentou ler diretório temporário já removido pelo harness; verificações finais feitas separadamente, sem enfraquecer lint.
 - **Interação dos runtimes:** após Vinext, `.next/types/routes` gerado ficou incompatível com o validator Next (`AppRoutes`, `LayoutRoutes`, `ParamMap`, `AppRouteHandlerRoutes` ausentes). Não é falha do domínio da feature; build Next regenerou seus arquivos e typecheck passou. Não se afirma que foi reproduzida no checkout anterior. Ao alternar, use `pnpm build` → `pnpm build:next` → `pnpm typecheck` (ou regenere tipos Next antes do typecheck). Não apagar arquivos do usuário para contornar.
