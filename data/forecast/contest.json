@@ -3,8 +3,8 @@
   "round": "2",
   "office": "1",
   "scope": "br",
-  "election": "<código oficial descoberto no TSE>",
+  "election": "6258",
   "electionAt": "2026-10-25T17:00:00-03:00",
-  "candidateIds": ["<id confirmado de A>", "<id confirmado de B>"],
-  "scenario": "<identificador fixo do cenário>"
+  "candidateIds": ["280002551544", "280002542548"],
+  "scenario": "presidente-br-2026-turno2"
 }

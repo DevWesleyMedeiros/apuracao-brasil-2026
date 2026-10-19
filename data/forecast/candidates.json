@@ -1,14 +1,14 @@
 [
   {
-    "id": "<candidato 01 mesmo id usado em candidateIds>",
-    "name": "Flávio",
-    "sourceUrl": "<URL da fonte oficial>",
-    "verifiedAt": "<data ISO da verificação com fuso>"
+    "id": "280002551544",
+    "name": "FLAVIO NANTES BOLSONARO",
+    "sourceUrl": "https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.json",
+    "verifiedAt": "2026-10-18T08:14:00-03:00"
   },
   {
-    "id": "< candidato 02 mesmo id usado em candidateIds>",
-    "name": "Lula",
-    "sourceUrl": "<URL da fonte oficial>",
-    "verifiedAt": "<data ISO da verificação com fuso>"
+    "id": "280002542548",
+    "name": "LUIZ INÁCIO LULA DA SILVA",
+    "sourceUrl": "https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.json",
+    "verifiedAt": "2026-10-18T08:14:00-03:00"
   }
 ]

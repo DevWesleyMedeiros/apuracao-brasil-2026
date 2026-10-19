@@ -1,32 +1,36 @@
 [
   {
-    "id": "<identificador único>",
-    "registration": "<registro real, no formato BR-NNNNN/2026>",
-    "institute": "<nome padronizado do instituto>",
-    "mode": "<modalidade informada no relatório>",
-
+    "id": "instituto-poderData(Aya)-2026-10-18-turno2",
+    "registration": "BR-02586/2026",
+    "institute": "PODERDATA PESQUISA, JORNALISMO E COMUNICACAO LTDA / PODERDATA",
+    "contractor": "PODERDATA PESQUISA, JORNALISMO E COMUNICACAO LTDA",
+    "mode": "telefônica IVR.",
     "year": 2026,
     "round": "2",
     "office": "1",
     "scope": "br",
-    "candidateIds": ["<id de A>", "<id de B>"],
-    "scenario": "<mesmo cenário de contest.json>",
-    "wave": "<identificador da rodada de coleta>",
-
-    "fieldStart": "<início do campo>",
-    "fieldEnd": "<fim do campo>",
-    "publishedAt": "<publicação>",
-    "reportUrl": "<URL do relatório>",
-    "registrationVerification": "<referência da conferência no PesqEle>",
-
-    "sampleSize": "<tamanho da amostra>",
+    "candidateIds": ["280002551544", "280002542548"],
+    "scenario": "presidente-br-2026-turno2",
+    "wave": "2026-10-19-pd-19",
+    "fieldStart": "2026-10-16",
+    "fieldEnd": "2026-10-18",
+    "publishedAt": "2026-10-19T07:31:00-03:00",
+    "reportUrl": "https://admin.cnnbrasil.com.br/wp-content/uploads/sites/12/2026/10/Relatorio-PoderData-Eleitoral-18out26.pdf",
+    "registrationVerification": "PesqEle/TSE —BR-02586/2026 — PoderData/AYA — registro de 13/10/2026 — consultado em 19/10/2026",
+    "sampleSize": 3000,
     "unit": "percent",
     "denominator": "total",
-    "a": "<percentual de A sobre o total>",
-    "b": "<percentual de B sobre o total>",
-
-    "accessedAt": "<data de acesso>",
-    "curation": "pending",
-    "provenance": ["<URL da fonte>"]
+    "a": 49,
+    "b": 46,
+    "undecided": 2,
+    "marginOfError": 1.8,
+    "confidenceLevel": 0.95,
+    "accessedAt": "2026-10-19",
+    "curation": "reviewed",
+    "provenance": [
+      "https://www.cnnbrasil.com.br/eleicoes/poderdata-aya-flavio-tem-52-dos-votos-validos-no-2o-turno-lula-48/",
+      "https://pesqele-divulgacao.tse.jus.br/app/pesquisa/detalhar.xhtml",
+      "https://admin.cnnbrasil.com.br/wp-content/uploads/sites/12/2026/10/Relatorio-PoderData-Eleitoral-18out26.pdf"
+    ]
   }
 ]
