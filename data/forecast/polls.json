@@ -97,5 +97,39 @@
       "https://www.cnnbrasil.com.br/eleicoes/vox-lula-tem-51-dos-votos-validos-no-2o-turno-flavio-49/",
       "https://www.tse.jus.br/eleicoes/pesquisa-eleitorais/consulta-as-pesquisas-registradas?utm_source=chatgpt.com"
     ]
+  },
+  {
+    "id": "instituto-btgNexus-2026-10-18-turno2",
+    "registration": "BR-04499/2026",
+    "institute": "NEXUS PESQUISA E INTELIGENCIA DE DADOS LTDA / NEXUS",
+    "contractor": "BANCO BTG PACTUAL S.A",
+    "mode": "Telefônica — CATI",
+    "year": 2026,
+    "round": "2",
+    "office": "1",
+    "scope": "br",
+    "candidateIds": ["280002551544", "280002542548"],
+    "scenario": "presidente-br-2026-turno2",
+    "wave": "2026-10-19-bgNex-19",
+    "fieldStart": "2026-10-16",
+    "fieldEnd": "2026-10-18",
+    "publishedAt": "2026-10-19",
+    "reportUrl": "https://docs.google.com/viewerng/viewer?url=https://admin.cnnbrasil.com.br/wp-content/uploads/sites/12/2026/10/BTG-Nexus-Eleicoes-2026-Rodada-18-19.out_.2026.pdf",
+    "registrationVerification": "PesqEle/TSE — BR-04499/2026 — btgNexus",
+    "sampleSize": 2002,
+    "unit": "percent",
+    "denominator": "total",
+    "a": 46.5,
+    "b": 45.9,
+    "undecided": 2.9,
+    "marginOfError": 2,
+    "confidenceLevel": 0.95,
+    "accessedAt": "2026-10-20",
+    "curation": "reviewed",
+    "provenance": [
+      "https://www.cnnbrasil.com.br/eleicoes/nexus-btg-flavio-tem-503-dos-votos-validos-no-2o-turno-lula-497/?utm_source=chatgpt.com",
+      "https://www.tse.jus.br/eleicoes/pesquisa-eleitorais/consulta-as-pesquisas-registradas?utm_source=chatgpt.com",
+      "https://docs.google.com/viewerng/viewer?url=https://admin.cnnbrasil.com.br/wp-content/uploads/sites/12/2026/10/BTG-Nexus-Eleicoes-2026-Rodada-18-19.out_.2026.pdf"
+    ]
   }
 ]
