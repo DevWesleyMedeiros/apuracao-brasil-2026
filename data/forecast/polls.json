@@ -131,5 +131,40 @@
       "https://www.tse.jus.br/eleicoes/pesquisa-eleitorais/consulta-as-pesquisas-registradas?utm_source=chatgpt.com",
       "https://docs.google.com/viewerng/viewer?url=https://admin.cnnbrasil.com.br/wp-content/uploads/sites/12/2026/10/BTG-Nexus-Eleicoes-2026-Rodada-18-19.out_.2026.pdf"
     ]
+  },
+  {
+    "id": "instituto-gerp-2026-10-16-turno2",
+    "registration": "BR-05187/2026",
+    "institute": "GERP MERCADOLOGIA LTDA / GRUPO GERP GERP MERCADO GERP OPINIAO",
+    "contractor": "GERP MERCADOLOGIA LTDA",
+    "mode": "Telefônica — CATI",
+    "year": 2026,
+    "round": "2",
+    "office": "1",
+    "scope": "br",
+    "candidateIds": ["280002551544", "280002542548"],
+    "scenario": "presidente-br-2026-turno2",
+    "wave": "2026-10-19-grp-16",
+    "fieldStart": "2026-10-14",
+    "fieldEnd": "2026-10-16",
+    "publishedAt": "2026-10-16",
+    "reportUrl": "https://static.poder360.com.br/uploads/2026/10/PesquisaGerp-presidente-16out2026.pdf",
+    "registrationVerification": "PesqEle/TSE — BR-02952/2026— gerp",
+    "sampleSize": 2400,
+    "unit": "percent",
+    "denominator": "total",
+    "a": 50,
+    "b": 45,
+    "undecided": 3,
+    "validSampleSize": 2308,
+    "marginOfError": 2,
+    "confidenceLevel": 0.9555,
+    "accessedAt": "2026-10-21",
+    "curation": "reviewed",
+    "provenance": [
+      "https://static.poder360.com.br/uploads/2026/10/PesquisaGerp-presidente-16out2026.pdf",
+      "https://www.tse.jus.br/eleicoes/pesquisa-eleitorais/consulta-as-pesquisas-registradas?utm_source=chatgpt.com",
+      "https://www.cnnbrasil.com.br/eleicoes/gerp-flavio-tem-52-dos-votos-validos-no-2o-turno-lula-48/"
+    ]
   }
 ]
