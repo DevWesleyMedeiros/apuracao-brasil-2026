@@ -201,10 +201,10 @@
     ]
   },
   {
-    "id": "instituto-meioIdeia-2026-10-18-turno2",
+    "id": "instituto-meioIdeia-2026-10-21-turno2",
     "registration": "BR-08251/2026",
     "institute": "BOAS IDEIAS INTELIGENCIA EM PESQUISA E ESTRATEGIA DIGITAL LTDA / BOAS IDEIAS, ESTRATEGIA E INTELIGENCIA DIGITAL.",
-    "contractor": "CANAL MEIO S.A. Origem do Recurso",
+    "contractor": "CANAL MEIO S.A.",
     "mode": "Telefônica",
     "year": 2026,
     "round": "2",
@@ -232,7 +232,9 @@
       "https://www.cnnbrasil.com.br/eleicoes/meio-ideia-flavio-tem-511-dos-votos-validos-no-2o-turno-lula-489/",
       "https://www.tse.jus.br/eleicoes/pesquisa-eleitorais/consulta-as-pesquisas-registradas?utm_source=chatgpt.com",
       "https://static.poder360.com.br/uploads/2026/10/Pesquisa-Meio_Ideia-Outubro-Imprensa.pdf?utm_source=chatgpt.com"
-    ]
+    ],
+    "blank": 3.4,
+    "null": 0
   },
   {
     "id": "instituto-palver-2026-10-21-turno2",
@@ -258,7 +260,7 @@
     "a": 50,
     "b": 48,
     "blank": 1,
-    "null": 1,
+    "null": 0,
     "marginOfError": 2.4,
     "confidenceLevel": 0.95,
     "accessedAt": "2026-10-21",
