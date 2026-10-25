@@ -1,7 +1,8 @@
 import { evaluationMetadataSchema, timestamp } from './types';
-export type ProbabilityBlockCode = 'publication-disabled' | 'evaluation-missing' | 'evaluation-invalid' | 'review-missing' | 'holdout-missing' | 'not-operational' | 'model-mismatch' | 'data-mismatch' | 'parameters-mismatch' | 'evaluation-after-cutoff' | 'election-after-cutoff';
+import { TRANSFORMATION_VERSION } from './identity';
+export type ProbabilityBlockCode = 'publication-disabled' | 'evaluation-missing' | 'evaluation-invalid' | 'review-missing' | 'holdout-missing' | 'not-operational' | 'model-mismatch' | 'data-mismatch' | 'parameters-mismatch' | 'evaluation-after-cutoff' | 'election-after-cutoff' | 'scope-mismatch' | 'evaluation-expired' | 'dependencies-mismatch';
 export type ProbabilityBlock = { code: ProbabilityBlockCode; message: string };
-export function probabilityPermission(input: { enabled: boolean; evaluation: unknown; modelVersion: string; dataVersion: string; parametersHash: string; asOf: string; year: number }) {
+export function probabilityPermission(input: { enabled: boolean; evaluation: unknown; modelVersion: string; dataVersion: string; parametersHash: string; asOf: string; year: number; mode?: 'pre'|'live'; baselineHash?:string|null; policyHash?:string|null }) {
     const probabilityBlocks: ProbabilityBlock[] = [];
     const block = (code: ProbabilityBlockCode, message: string) => probabilityBlocks.push({ code, message });
     if (!input.enabled) block('publication-disabled', 'Publicação de probabilidades desabilitada por configuração.');
@@ -14,9 +15,11 @@ export function probabilityPermission(input: { enabled: boolean; evaluation: unk
         if (!data.independentHoldout) block('holdout-missing', 'Holdout independente não registrado.');
         if (!data.operational) block('not-operational', 'Avaliação operacional não registrada.');
         if (data.modelVersion !== input.modelVersion) block('model-mismatch', 'Versão do modelo incompatível com a avaliação.');
-        if (data.dataVersion !== input.dataVersion) block('data-mismatch', 'Hash dos dados incompatível com a avaliação. Alterações nos dados exigem nova revisão vinculada à dataVersion.');
+        if(data.mode!==(input.mode??'pre') || data.scope.year!==input.year) block('scope-mismatch','Modo ou escopo da avaliação incompatível.');
+        if(data.transformationVersion!==TRANSFORMATION_VERSION || data.dependencies.baselineHash!==(input.baselineHash??null) || data.dependencies.policyHash!==(input.policyHash??null)) block('dependencies-mismatch','Transformação, baseline ou política exigem avaliação/revisão compatível.');
         if (data.parametersHash !== input.parametersHash) block('parameters-mismatch', 'Hash dos parâmetros incompatível com a avaliação.');
-        if (timestamp(data.publishedAt) > timestamp(input.asOf)) block('evaluation-after-cutoff', 'Avaliação ainda não estava disponível neste corte.');
+        if (Math.max(timestamp(data.publishedAt),timestamp(data.reviewedAt)) > timestamp(input.asOf)) block('evaluation-after-cutoff', 'Avaliação/revisão ainda não estava disponível neste corte.');
+        if(timestamp(data.validUntil)<timestamp(input.asOf)) block('evaluation-expired','Validade temporal da avaliação encerrada.');
         if ([...data.trainingElections, ...data.evaluationElections].some(y => y >= input.year)) block('election-after-cutoff', 'Treino ou avaliação inclui eleição não anterior ao pleito.');
     }
     const reviewed = !probabilityBlocks.some(b => b.code !== 'publication-disabled');
