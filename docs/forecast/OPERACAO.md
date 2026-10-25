@@ -2,7 +2,7 @@
 
 ## Estado e arquitetura
 
-Software experimental, **não modelo estatisticamente calibrado**. Em `lib/forecast/config.ts`: `preEnabled=true`, `liveEnabled=false`, `publicProbabilityEnabled=false`. Produção começa vazia: pesquisas/candidaturas `[]`; disputa, baseline, avaliação e snapshot `null`. Pré retorna `no-data`; live, `disabled`. Não há coletor em execução, infraestrutura nova, LLM nem PostgreSQL. D1 existente é opcional e não provisionado para esta feature.
+Software experimental, **não modelo estatisticamente calibrado**. Em `lib/forecast/config.ts`: `preEnabled=true`, `liveEnabled=false`, `publicProbabilityEnabled=false`. Checkout revalidado em 24/10/2026, referência `52c3aeaa3498184d8fbadc6f833afe11d4490bca`: há 12 registros de pesquisas, duas candidaturas e disputa cadastradas nos JSONs; isso não equivale a auditoria independente das fontes. Baseline, avaliação e snapshot continuam `null`. Pré pode retornar `ready` com parcela de votos e probabilidades null; live continua `disabled`. Não há coletor em execução, infraestrutura nova, LLM nem PostgreSQL. D1 existente é opcional e não provisionado para esta feature.
 
 - `lib/electoral-context.ts`, `election.ts`, `tse.ts`: descoberta exata por ciclo/data/turno/cargo, validação oficial e transporte. Padrão legado é primeiro turno; segundo turno explícito, somente presidente. Municípios preservam cinco dígitos e pertencimento à UF; DF, ZZ e regiões completas continuam suportados. Cache/fallback não cruzam turnos ou eleições.
 - `lib/forecast/`: schemas Zod e matemática pura; relógio, seed, dados e parâmetros explícitos. Sem fetch/fs/aleatoriedade ambiente.
@@ -10,6 +10,23 @@ Software experimental, **não modelo estatisticamente calibrado**. Em `lib/forec
 - `scripts/`: CLIs manuais Node e extensão do harness existente, sem novo test runner. Fixtures sintéticas só nos testes.
 
 Unidades internas: proporções [0,1]. `weightedPollShare` é média ponderada das pesquisas; `median` é mediana preditiva; `probabilityA/B/Tie` são chances condicionais ao modelo, não parcela de votos. `sectionFraction` mede seções; `estimatedVoteFraction` depende do volume estimado.
+
+## Apuração oficial presidencial · 25/10/2026
+
+- Entrada compartilhável: `/?round=2`; `/?round=1` preserva acesso ao primeiro turno. A partir de 00h de 25/10/2026 em America/Sao_Paulo, a página sem turno válido inicia no segundo. Regra pura com relógio injetado nos testes; resolução no servidor por requisição e valor serializado para hidratação. API mantém padrão legado de primeiro turno.
+- Segundo turno suporta somente presidente, inclusive nacional, UFs, exterior, regiões completas e municípios. Não anuncia governadores. Troca de contexto limpa resultado antes de exibir o novo recorte; abortos, sequência e chave impedem respostas antigas.
+- Atualização automática a cada 60s, sem sobreposição e pausada em aba oculta; retorno à aba consulta imediatamente se a última tentativa estiver vencida. Falha preserva o resultado e horário da consulta bem-sucedida, com alerta. `stale` do servidor mantém o horário original da fonte; horário da consulta no navegador não é atualização da fonte. `waiting`, `withheld`, `partial` e `finished` continuam distintos.
+- Limites existentes, **sem refatoração de infraestrutura**: configuração e catálogo municipal em cache por uma hora (mudança do TSE pode demorar a aparecer); backoff por falhas de até dez minutos; fallback apenas em memória/instância, perdido em reinício; nenhuma deduplicação global de I/O concorrente. Cache completo por URL/contexto, sem compartilhar promises entre requisições Workers. Um build não garante disponibilidade da fonte ou capacidade sob carga.
+
+Smoke manual somente leitura, uma passagem sequencial (1s entre consultas, timeout de 30s, sem retry automático):
+
+```sh
+node scripts/smoke-official-runoff.mjs --url http://127.0.0.1:3000
+```
+
+Consulta nacional, RS, ZZ, Sul, catálogo municipal do RS e Porto Alegre com `round=2`. Código municipal vem do catálogo e código de eleição das respostas; nenhum fallback fixo. Valida HTTP/JSON, contexto, identificação territorial e estados; aceita zeros antes da abertura. Erros, stale ou catálogo ausente geram saída não zero; 429 interrompe consultas restantes. Não repetir agressivamente; observar Retry-After e diagnóstico. Pode receber URL base do ambiente autorizado, sem credenciais.
+
+Checklist: conferir relógio/turno e link compartilhável; executar smoke; revisar fonte versus consulta e alertas de stale; conferir nacional/RS/ZZ/Sul/Porto Alegre; testar retorno à aba; deixar flags probabilísticas/live desligadas; manter acesso direto a resultados.tse.jus.br em contingência. Não substituir indisponibilidade por dados sintéticos.
 
 API discriminada: `disabled`, `no-data`, `insufficient-data` têm `estimate:null`; `ready`, `stale`, `finished` carregam estimativas. Metadados: contexto, modo, corte/cálculo/fonte, versão/hashes, seed, calibração, fontes, candidatos, contagem, pesos e concentração. `finished` não publica probabilidade de previsão. `stale` preserva horários e contexto originais. Ausência nunca significa 50/50.
 
@@ -129,9 +146,21 @@ node scripts/collect-forecast-snapshots.mjs --output /CAMINHO/snapshots-live --b
 
 ## Gates e dependências reais
 
-- Pré-agregação ligada, mas faltam pesquisas e candidaturas/disputa verificadas; ausência é funcional.
+- Pré-agregação ligada, com pesquisas/candidaturas/disputa cadastradas. Elegibilidade depende do corte e das validações; não há relatório independente de calibração no checkout.
 - Probabilidades: `evaluation.json` real conforme `evaluationMetadataSchema`, relatório independente, versões/hashes correspondentes, treino/avaliação separados e anteriores ao pleito, revisão de qualidade/holdout/operacional, publicação até o corte. Depois de revisão humana, `publicProbabilityEnabled=true` e novo build. Flag sozinha não habilita nada; JSON não substitui auditoria do relatório. Gate por modelo/modo, live requer avaliação própria.
 - Live: baseline final conciliado, finalistas/mapping confirmados, política de destinos, snapshots atuais completos, avaliação específica e resolução da ingestão acima. `liveEnabled` continua false. Desabilitar: flags false e reconstruir.
-- Não fornecidos: pesquisas verificadas, dupla oficial/contexto descoberto real, 29 arquivos finais conciliados, mapping, política revisada, snapshots atuais, datasets retrospectivos e relatório independente. Testes sintéticos não são evidência de qualidade eleitoral.
+- Não fornecidos: baseline/29 arquivos finais conciliados e mapping auditados, política revisada, snapshots atuais/ingestão contínua, datasets retrospectivos e relatório independente. Testes sintéticos não são evidência de qualidade eleitoral. Candidaturas e fontes cadastradas não foram novamente auditadas externamente por esta correção.
 
-Evidências específicas: [VERIFICACAO.md](VERIFICACAO.md). Metodologia acessível também em `/projecao/metodologia`.
+### Bloqueio auditável de probabilidades
+
+`probabilityReason` permanece compatível (resumo humano); `probabilityBlocks` contém motivos cumulativos com `code` e `message`: publicação desligada, avaliação ausente/inválida, revisão/holdout/operacional ausentes, incompatibilidade de modelo/dados/parâmetros e avaliação/eleições indisponíveis no corte. Não envia conteúdo arbitrário de validação, credenciais ou relatório bruto ao navegador. A consulta pode estar `ready` e ainda ter probabilidades null: isso não é erro React nem de carregamento. Zero é exibido como zero segundo `probabilityLabel`; null nunca vira 0% ou 50%.
+
+No checkout atual há **dois bloqueios concretos**: flag desligada e `evaluation.json=null`. Falta dataset retrospectivo auditável com pesquisas/resultados oficiais e proveniência, treino em eleições anteriores, parâmetros disponíveis à época, holdout independente por eleição, relatório operacional público com versões/hashes e data até o corte, e revisão humana documentada. Booleanos de metadados não comprovam calibração. Uma avaliação real futura deve ser conferida contra o relatório e os hashes antes de qualquer autorização; esta alteração não habilita publicação automaticamente.
+
+`dataVersion=SHA256(JSON.stringify({polls,candidates,contest,baseline,snapshot}))`; `parametersHash=SHA256(JSON.stringify({pre:MODEL_CONFIG,live:LIVE_CONFIG}))`. Qualquer mudança nesses dados atuais invalida a vinculação da avaliação à dataVersion, inclusive uma nova pesquisa. Exige revisão/reavaliação documentada vinculada ao novo hash, não relaxamento silencioso da comparação. Avaliação não entra no próprio hash para evitar circularidade.
+
+Empate exato no modelo contínuo com dispersão tem probabilidade zero, não uma impossibilidade de empate na contagem real discreta. Sem dispersão há tratamento degenerado próprio. Não mede “empate técnico”, sobreposição de intervalos ou disputa apertada; tal métrica exigiria definição e trabalho separados.
+
+O gráfico converte cada data uma vez pelo contrato `timestamp`: datas sem hora no fim do dia de Brasília, offsets preservados. Círculos observados, linha reta/quadrados de mediana e faixa/segmentos preditivos de 95%; tabela e seletor permitem inspecionar pesquisas sobrepostas sem deslocar instantes. Escala completa por padrão; ampliada identificada contém todos os valores, intervalos, margem e 50%. Série **recalculada por corte com os dados desta versão**, não snapshots imutáveis de publicação. Sem nova pesquisa elegível o decaimento comum cancela na normalização; platôs da mediana podem ser corretos enquanto a incerteza muda. Pesos e parâmetros não foram alterados.
+
+Evidências atuais: [VERIFICACAO-2026-10-24.md](VERIFICACAO-2026-10-24.md). [VERIFICACAO.md](VERIFICACAO.md) é o registro histórico de 15/10, anterior ao cadastro das pesquisas atuais. Metodologia acessível também em `/projecao/metodologia`.
