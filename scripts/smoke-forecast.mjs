@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { args } from './forecast-cli.mjs';
-const options=args(['url']);
+const options=args(['url','evaluation-state']);
+const evaluationState=options['evaluation-state']??'missing';
+if(!['missing','invalid'].includes(evaluationState))throw new Error('Use --evaluation-state missing|invalid conforme o arquivo local.');
 const base=options.url??'http://127.0.0.1:3000';
 const url=new URL(base);
 if(!['localhost','127.0.0.1','[::1]'].includes(url.hostname))throw new Error('Smoke permitido somente no servidor local.');
@@ -12,7 +14,7 @@ for(const mode of ['pre','live']) {
   assert.ok(mode==='live'?payload.state==='disabled':['ready','no-data','insufficient-data','disabled'].includes(payload.state));
   assert.equal(payload.publicProbabilityEnabled,false);
   assert.ok(payload.probabilityBlocks.some(b=>b.code==='publication-disabled'));
-  assert.ok(payload.probabilityBlocks.some(b=>b.code==='evaluation-missing'));
+  assert.ok(payload.probabilityBlocks.some(b=>b.code===`evaluation-${evaluationState}`));
   if(payload.estimate) { for(const key of ['probabilityA','probabilityB','probabilityTie']) assert.equal(payload.estimate[key],null); }
   if(payload.state!=='ready') assert.equal(response.headers.get('cache-control'),'no-store');
   console.log(mode,payload.state,`${(performance.now()-start).toFixed(1)}ms HTTP local`);
