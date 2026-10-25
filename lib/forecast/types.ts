@@ -63,12 +63,26 @@ export const configSchema = z.object({
     simulations: z.number().int().min(100).max(20000), seed: z.number().int().min(0).max(4294967295), houseEffectsEnabled: z.literal(false),
 }).strict();
 export type ModelConfig = z.infer<typeof configSchema>;
-export const evaluationMetadataSchema = z.object({
+export const legacyEvaluationMetadataSchema = z.object({
     id: z.string().min(1), reportUrl: z.string().url(), publishedAt: dateSchema, modelVersion: z.string(), dataVersion: z.string(),
     parametersHash: z.string().min(1), trainingElections: z.array(z.number().int()), evaluationElections: z.array(z.number().int()).min(1),
     operational: z.boolean(), qualityReviewed: z.boolean(), independentHoldout: z.boolean(),
 }).strict().refine(e => !e.trainingElections.some(y => e.evaluationElections.includes(y)), 'Treino e avaliação devem ser separados por eleição.')
     .refine(e => !e.operational || (e.trainingElections.length>0 && e.trainingElections.every(y=>y<Math.min(...e.evaluationElections))), 'Avaliação operacional exige treino em eleições anteriores à avaliação.');
+// Historical dataset identity is NOT an operational observation hash.
+export const evaluationMetadataSchema = z.object({
+    schemaVersion: z.literal('2'), id: z.string().min(1), mode: z.enum(['pre','live']), modelVersion: z.string().min(1),
+    parametersHash: z.string().min(1), historicalDatasetHash: z.string().regex(/^[a-f0-9]{64}$/), reportHash: z.string().regex(/^[a-f0-9]{64}$/), reportUrl: z.string().url(),
+    protocol: z.string().min(1), transformationVersion: z.string().min(1),
+    scope: z.object({year:z.number().int(),round:z.literal('2'),office:z.literal('1'),territory:z.literal('br')}).strict(),
+    dependencies: z.object({baselineHash:z.string().nullable(),policyHash:z.string().nullable()}).strict(),
+    publishedAt: dateSchema, validUntil: dateSchema, reviewedAt: dateSchema, reviewReference: z.string().url(),
+    trainingElections:z.array(z.number().int()).min(1), evaluationElections:z.array(z.number().int()).min(1),
+    operational:z.boolean(), qualityReviewed:z.boolean(), independentHoldout:z.boolean(),
+}).strict().refine(e => !e.trainingElections.some(y=>e.evaluationElections.includes(y)), 'Treino/avaliação sobrepostos.')
+    .refine(e => e.trainingElections.every(y=>y<Math.min(...e.evaluationElections)), 'Treino deve preceder avaliação.')
+    .refine(e => {try{return timestamp(e.reviewedAt)>=timestamp(e.publishedAt) && timestamp(e.validUntil)>=timestamp(e.reviewedAt);}catch{return false;}}, 'Validade/revisão incompatíveis.');
+export const evaluationRegistrySchema=z.object({schemaVersion:z.literal('2'),pre:evaluationMetadataSchema.nullable(),live:evaluationMetadataSchema.nullable()}).strict();
 export const baselineSchema = z.object({
     schemaVersion: z.literal('1'), sourceElection: z.string().regex(/^\d{1,6}$/), target: contestSchema,
     sourceHash: z.string().min(1), targetEvidenceHash:z.string().min(1), verifiedAt: dateSchema, verificationUrl: z.string().url(), secondRoundConfirmed: z.literal(true),
