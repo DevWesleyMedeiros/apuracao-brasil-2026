@@ -14,6 +14,6 @@ export const MODEL_CONFIG = configSchema.parse({
 });
 export const FLAGS = {
   preEnabled: true,
-  liveEnabled: false,
-  publicProbabilityEnabled: false,
+  liveEnabled: true,
+  publicProbabilityEnabled: true,
 } as const;
