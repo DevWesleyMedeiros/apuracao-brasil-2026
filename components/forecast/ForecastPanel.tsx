@@ -103,7 +103,7 @@ export function ForecastPanel() {
           >
             <h2 className="text-xl font-bold">{labels[data.state]}</h2>
             <p className="mt-2">{data.message}</p>
-            {mode === 'live' && <p className="mt-3"><Link className="font-semibold underline" href="/?round=2">Acompanhar apuração oficial presidencial · segundo turno</Link>. A projeção ao vivo não possui ingestão contínua ativa.</p>}
+            {mode === 'live' && <p className="mt-3"><Link className="font-semibold underline" href="/?round=2">Acompanhar apuração oficial presidencial · segundo turno</Link>. A ingestão oficial é independente; a projeção exige insumos completos, compatíveis e autorização própria.</p>}
             {data.state === "stale" && (
               <p>
                 Último cálculo íntegro: {data.computedAt}. Não é uma atualização
@@ -201,6 +201,8 @@ export function ForecastPanel() {
             </p>
             <p>Versão dos dados (SHA-256): {data.dataVersion}</p>
             <p>Parâmetros (SHA-256): {data.parametersHash}</p>
+            {data.collectionId && <p>Conjunto estatístico: {data.collectionId} · obtido em {data.snapshotFetchedAt}. Não é necessariamente a mesma coleta do painel nacional.</p>}
+            {data.evaluationHash && <p>Avaliação (SHA-256): {data.evaluationHash} · dataset histórico: {data.historicalDatasetHash ?? 'não validado'}.</p>}
             <ul>
               {data.sources.map((url) => (
                 <li key={url}>

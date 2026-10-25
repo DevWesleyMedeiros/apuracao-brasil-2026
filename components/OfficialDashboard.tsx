@@ -659,6 +659,11 @@ export default function OfficialDashboard({ initialRound }: { initialRound: '1' 
                     : "Ver arquivo de origem"}
                 </a>
               </p>
+              {result.collectionId && <p>
+                Coleta nacional: <span title={result.collectionId}>{result.collectionId.slice(0, 12)}</span>.{" "}
+                Arquivo obtido em {result.fetchedAt}; última tentativa do coletor: {result.checkedAt}.{" "}
+                Horários ISO com fuso; consultar novamente não altera o horário da fonte.
+              </p>}
               {result.state === "waiting" && (
                 <p>
                   Zeros correspondem ao arquivo oficial anterior à apuração; não
