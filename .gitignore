@@ -50,3 +50,8 @@ CLAUDE.md
 /.claude/
 /outputs/
 /work/
+/.forecast-operation/
+/data/forecast/versions/
+/data/forecast/current.json
+/data/forecast/status.json
+/data/forecast/data.json
