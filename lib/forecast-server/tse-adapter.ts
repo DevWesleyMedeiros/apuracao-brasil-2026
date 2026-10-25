@@ -1,5 +1,5 @@
 import type { Result } from '../catalog';
-import { normalizeResult } from '../election';
+import { normalizeResult, resultSchema } from '../election';
 import { baselineSchema, timestamp, type Baseline } from '../forecast/types';
 import { reconcileSnapshot, type DestinationPolicy } from '../forecast/snapshot';
 import { LIVE_CONFIG, projectLive } from '../forecast/live';
@@ -8,9 +8,15 @@ export function sourceTimestamp(value:string) {
     if(!m) throw new Error('Horário da fonte ausente ou inválido.');
     return timestamp(`${m[3]}-${m[2]}-${m[1]}T${m[4]}-03:00`);
 }
+export function normalizeIngestedResult(raw:unknown,uf:string,election:string,url:string) {
+    const parsed=resultSchema.parse(raw);
+    const result=normalizeResult(parsed,uf,'1',election,url,undefined,{round:'2'});
+    if(parsed.tf==='s' && (parsed.and!=='f' || result.sections.total<=0 || result.sections.count!==result.sections.total))throw new Error('Conclusão oficial inconsistente; não inferir fechamento por percentual.');
+    return result;
+}
 export function adaptTseSnapshot(input:{files:{uf:string;raw:unknown;url:string}[];baseline:Baseline;asOf:string;policy:DestinationPolicy;config:typeof LIVE_CONFIG}) {
     const baseline=baselineSchema.parse(input.baseline);
-    const results=input.files.map(file=>normalizeResult(file.raw,file.uf,'1',baseline.target.election,file.url,undefined,{round:'2'}));
+    const results=input.files.map(file=>normalizeIngestedResult(file.raw,file.uf,baseline.target.election,file.url));
     return adaptResults({...input,results});
 }
 export function adaptResults(input:{results:Result[];baseline:Baseline;asOf:string;policy:DestinationPolicy;config:typeof LIVE_CONFIG}) {
