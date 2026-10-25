@@ -1,30 +1,16 @@
-import { args, withDomain, collectArchived, readJson, atomicJson } from './forecast-cli.mjs';
-import path from 'node:path';
+import { args, withDomain } from './forecast-cli.mjs';
+import { createOfficialCollector, runContinuous } from './official-collector.mjs';
+
+const controller=new AbortController();
+const stop=()=>controller.abort(new DOMException('Coleta interrompida.','AbortError'));
+process.once('SIGINT',stop);process.once('SIGTERM',stop);
 try {
-  const options=args(['output','baseline','policy','interval-seconds','pre-as-of']);
-  if(!options.output || !options.baseline || !options.policy) throw new Error('Uso: node scripts/collect-forecast-snapshots.mjs --output DIRETORIO --baseline BASELINE.json --policy POLITICA.json [--interval-seconds 60]');
-  const interval=options['interval-seconds']===undefined?null:Number(options['interval-seconds']);
-  if(interval!==null && (!Number.isInteger(interval) || interval<60 || interval>86400)) throw new Error('Intervalo deve ser de 60 a 86400 segundos.');
-  const controller=new AbortController();
-  const stop=()=>controller.abort();process.once('SIGINT',stop);process.once('SIGTERM',stop);
-  try {
-    await withDomain(async load=>{
-      const {baselineSchema}=await load('forecast/types');
-      const {adaptResults}=await load('forecast-server/tse-adapter');
-      const {LIVE_CONFIG}=await load('forecast/live');
-      const baseline=baselineSchema.parse(await readJson(options.baseline)),policy=await readJson(options.policy);
-      do {
-        const {snapshot,archived}=await collectArchived(load,{round:'2',election:baseline.target.election,signal:controller.signal},options.output);
-        adaptResults({results:snapshot.results,baseline,policy,asOf:new Date().toISOString(),config:LIVE_CONFIG});
-        if(options['pre-as-of']) {
-          const {liveSnapshotSchema}=await load('forecast-server/live-service');
-          const latest=liveSnapshotSchema.parse({frozenPreAsOf:options['pre-as-of'],policy,files:snapshot.results.map((r,i)=>({uf:r.uf,url:r.sourceUrl,raw:snapshot.files[i+1].data}))});
-          await atomicJson(path.join(options.output,'latest.json'),latest);
-        }
-        console.log('Snapshot imutável validado:',archived.directory);
-        if(interval===null || controller.signal.aborted) break;
-        await new Promise(resolve=>{const timer=setTimeout(done,interval*1000);function done(){clearTimeout(timer);controller.signal.removeEventListener('abort',done);resolve();}controller.signal.addEventListener('abort',done,{once:true});});
-      } while(!controller.signal.aborted);
-    });
-  } finally {process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);}
-} catch(error) { if(error.name!=='AbortError'){console.error(error.message);process.exitCode=1;} }
+  const options=args(['output','history','baseline','policy','frozen-pre','interval-seconds','mode']);
+  const interval=Number(options['interval-seconds']??60),mode=options.mode??'once';
+  if(!Number.isInteger(interval)||interval<60||interval>86400||!['once','continuous'].includes(mode))throw new Error('Use --mode once|continuous e --interval-seconds 60..86400.');
+  await withDomain(async load=>{
+    const round=await createOfficialCollector(load,{output:options.output??'data/forecast',history:options.history??'.forecast-operation',baseline:options.baseline,policy:options.policy,frozenPre:options['frozen-pre'],signal:controller.signal});
+    await runContinuous(round,{intervalMs:interval*1000,signal:controller.signal,once:mode==='once',onError:error=>console.warn('[collector] rodada falhou:',error.message)});
+  });
+} catch(error) {if(!controller.signal.aborted){console.error(error.message);process.exitCode=1;}}
+finally {process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);}
