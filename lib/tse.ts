@@ -180,7 +180,7 @@ export async function getRegionResult(
   const region = REGIONS.find((r) => r.code === code);
   if (!region) throw new Error("Região inválida.");
   const selection = electionSelection(options);
-  const config = await cachedJson(CONFIG_URL, 3600000, signal);
+   const config = await cachedJson(CONFIG_URL, 60000, signal);
   const election = resolveElection(config, "1", options);
   const key = JSON.stringify({ ...selection, election, office: '1', region: code });
   try {
@@ -239,7 +239,7 @@ export async function getResult(
   const { uf, office } = querySelection(rawUf, rawOffice, options);
   if (municipalityCode) validateMunicipalityFilter(uf, municipalityCode);
   const selection = electionSelection(options);
-  const config = await cachedJson(CONFIG_URL, 3600000, signal);
+  const config = await cachedJson(CONFIG_URL, 60000, signal);
   const election = resolveElection(config, office, options);
   const key = JSON.stringify({ ...selection, election, uf, office, municipalityCode });
   try {

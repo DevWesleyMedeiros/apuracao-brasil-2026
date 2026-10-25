@@ -5,7 +5,7 @@ import { candidateSchema, contestSchema, timestamp, type ModelConfig } from '../
 import { supportsProductionContest } from '../forecast/production-context';
 
 export type ForecastMode = 'pre' | 'live';
-export type ForecastData = { polls: unknown[]; candidates: unknown[]; contest: unknown; evaluation: unknown; dataVersion: string };
+export type ForecastData = { polls: unknown[]; candidates: unknown[]; contest: unknown; evaluation: unknown; dataVersion: string; baselineHash?:string|null; policyHash?:string|null };
 type Estimate = { a: { median: number; lo: number; hi: number }; b: { median: number; lo: number; hi: number }; weightedPollShare: number | null; probabilityA: number | null; probabilityB: number | null; probabilityTie: number | null };
 export type ForecastMetadata = {
     mode: ForecastMode; context: { cycle: string; year: number; round: '2'; office: '1'; scope: 'br'; election: string | null; electionAt: string };
@@ -14,6 +14,8 @@ export type ForecastMetadata = {
     candidates: { id: string; name: string; sourceUrl: string; verifiedAt: string }[];
     pollCount: number; instituteCount: number; eligibleCount: number; newestFieldAgeDays: number | null; weightConcentration: number | null;
     sources: string[]; warnings: string[]; historical: boolean;
+    operationalHashes?:Record<string,string|null>; collectionId?:string|null; snapshotFetchedAt?:string|null;
+    evaluationHash?:string; historicalDatasetHash?:string|null;
 };
 type Base = ForecastMetadata & { polls: NonNullable<ReturnType<typeof aggregate>>['polls']; series: { asOf: string; median: number; lo: number; hi: number; dataVersion: string; modelVersion: string }[] };
 export type ForecastResponse = Base & (
@@ -27,7 +29,7 @@ export function buildForecast(input: {
     const { data, config, asOf, computedAt, flags, mode } = input;
     const contest = data.contest === null ? null : contestSchema.parse(data.contest);
     const candidates = data.candidates.map(c => candidateSchema.parse(c));
-    const permission = probabilityPermission({ enabled: flags.publicProbabilityEnabled, evaluation: data.evaluation, modelVersion: config.version, dataVersion: data.dataVersion, parametersHash: input.parametersHash, asOf, year: contest?.year ?? 2026 });
+    const permission = probabilityPermission({ enabled: flags.publicProbabilityEnabled, evaluation: data.evaluation, modelVersion: config.version, dataVersion: data.dataVersion, parametersHash: input.parametersHash, asOf, year: contest?.year ?? 2026, mode, baselineHash:data.baselineHash,policyHash:data.policyHash });
     const base: Base = { mode, context: { cycle: 'ele2026', year: 2026, round: '2', office: '1', scope: 'br', election: contest?.election ?? null, electionAt: contest?.electionAt ?? '2026-10-25T17:00:00-03:00' },
         asOf, computedAt, sourceUpdatedAt: null, modelVersion: config.version, dataVersion: data.dataVersion, parametersHash: input.parametersHash, seed: config.seed,
         ...permission, candidates, pollCount: 0, instituteCount: 0, eligibleCount: 0, newestFieldAgeDays: null, weightConcentration: null, sources: [],

@@ -61,4 +61,8 @@ export type Result = {
     region?: Exclude<RegionCode, 'all'>;
     sources?: { uf: string; url: string; generatedAt: string }[];
     municipality?: Municipality;
+    collectionId?: string;
+    contentHash?: string | null;
+    fetchedAt?: string | null;
+    sourceUpdatedAt?: string | null;
 };
