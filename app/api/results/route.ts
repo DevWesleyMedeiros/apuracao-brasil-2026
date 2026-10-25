@@ -3,6 +3,7 @@ import { withDeadline } from "@/lib/deadline";
 import { REGIONS } from "@/lib/catalog";
 import { querySelection } from "@/lib/election";
 import type { Round } from '@/lib/electoral-context';
+import { storedOfficialResult } from '@/lib/forecast-server/official';
 import {
   InvalidMunicipalityError,
   validateMunicipalityFilter,
@@ -35,10 +36,10 @@ export async function GET(request: Request) {
     const started = Date.now();
     console.info("[results] start", { uf, office, region, municipality });
     const result = await withDeadline(
-      (signal) =>
+      async (signal) =>
         region
           ? getRegionResult(region, signal, { round })
-          : getResult(uf, office, signal, municipality ?? undefined, { round }),
+          : (uf==='br' && office==='1' && round==='2' && !municipality ? await storedOfficialResult(Date.now()) : null) ?? getResult(uf, office, signal, municipality ?? undefined, { round }),
       26000,
       request.signal,
     );
@@ -52,9 +53,7 @@ export async function GET(request: Request) {
     });
     return Response.json(result, {
       headers: {
-        "Cache-Control": result.stale
-          ? "no-store"
-          : "public, max-age=15, s-maxage=30",
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {

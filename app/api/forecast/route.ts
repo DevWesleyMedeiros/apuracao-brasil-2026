@@ -9,7 +9,8 @@ export async function GET(request: Request) {
     try {
         const result = await withDeadline(() => productionForecast(query), 10000, request.signal);
         console.info('[forecast]', {mode:query.mode,state:result.state,elapsedMs:Date.now()-started});
-        return Response.json(result,{headers:{'Cache-Control':result.state === 'ready' || result.state==='finished' ? query.mode==='pre'?'public, max-age=60, s-maxage=300':'public, max-age=5, s-maxage=15' : 'no-store'}});
+        // Authorization can be revoked independently of the observations.
+        return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     } catch {
         console.warn('[forecast] unavailable');
         return Response.json({message:'Projeção indisponível. A apuração oficial permanece independente.'},{status:503,headers:{'Cache-Control':'no-store','Retry-After':'60'}});
