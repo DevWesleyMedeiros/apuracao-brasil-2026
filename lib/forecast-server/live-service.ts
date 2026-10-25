@@ -23,13 +23,19 @@ export function buildLiveForecast(input:{base:ForecastResponse;data:ForecastData
         const projected=projectLive({territories:adapted.territories,baseline,preShareA:pre?.weightedPollShare??null,config:LIVE_CONFIG});
         if(!projected.distribution) return {...base,state:'insufficient-data',message:projected.message,estimate:null};
         const finished=projected.state==='finished',d=projected.distribution;
-        const permission=probabilityPermission({enabled:input.probabilityEnabled,evaluation:input.data.evaluation,modelVersion:LIVE_CONFIG.version,dataVersion:base.dataVersion,parametersHash:base.parametersHash,asOf:base.asOf,year:baseline.target.year});
+        const permission=probabilityPermission({enabled:input.probabilityEnabled,evaluation:input.data.evaluation,modelVersion:LIVE_CONFIG.version,dataVersion:base.dataVersion,parametersHash:base.parametersHash,asOf:base.asOf,year:baseline.target.year,mode:'live',baselineHash:input.data.baselineHash,policyHash:input.data.policyHash});
         return {...base,...permission,modelVersion:LIVE_CONFIG.version,sourceUpdatedAt:adapted.sourceUpdatedAt,state:projected.state,message:projected.message,sources:adapted.sources,
             warnings:[...base.warnings,`Máxima idade da fonte: ${LIVE_CONFIG.maxSourceAgeMs/1000}s; defasagem permitida: ${LIVE_CONFIG.maxSourceSkewMs/1000}s; observada: ${adapted.sourceSkewMs/1000}s.`,`Modelo A congelado em ${snapshot.frozenPreAsOf}; avanço de seções não equivale a votos.`],
             publicProbabilityEnabled:!finished&&permission.publicProbabilityEnabled,probabilityReason:finished?'Apuração encerrada: resultado oficial reproduzido, não previsão de vitória.':permission.probabilityReason,
             estimate:{a:d.a,b:d.b,weightedPollShare:pre?.weightedPollShare??null,probabilityA:!finished&&permission.publicProbabilityEnabled?d.probabilityA:null,probabilityB:!finished&&permission.publicProbabilityEnabled?d.probabilityB:null,probabilityTie:!finished&&permission.publicProbabilityEnabled?d.probabilityTie:null}};
     } catch {
-        if(previous && (previous.state==='ready'||previous.state==='finished') && previous.mode==='live' && JSON.stringify(previous.context)===JSON.stringify(base.context) && previous.parametersHash===base.parametersHash && previous.modelVersion===LIVE_CONFIG.version) return {...previous,state:'stale',message:'Nova projeção suspensa: snapshot inválido, ausente, retido ou antigo. Horários originais preservados.'};
+        if(previous && (previous.state==='ready'||previous.state==='finished') && previous.mode==='live' && JSON.stringify(previous.context)===JSON.stringify(base.context) && previous.parametersHash===base.parametersHash && previous.modelVersion===LIVE_CONFIG.version && previous.operationalHashes && base.operationalHashes && ['baseline','policy','frozenPre','candidates','context'].every(key=>previous.operationalHashes![key]===base.operationalHashes![key])) {
+            const permission=probabilityPermission({enabled:input.probabilityEnabled,evaluation:input.data.evaluation,modelVersion:LIVE_CONFIG.version,dataVersion:previous.dataVersion,parametersHash:base.parametersHash,asOf:base.asOf,year:base.context.year,mode:'live',baselineHash:input.data.baselineHash,policyHash:input.data.policyHash});
+            // Reauthorization at the current time, even when the estimate is old.
+            // Never restore probabilities after revocation or at official closure.
+            const allowed=permission.publicProbabilityEnabled && previous.state!=='finished';
+            return {...previous,...permission,evaluationHash:base.evaluationHash,historicalDatasetHash:base.historicalDatasetHash,publicProbabilityEnabled:allowed,state:'stale',estimate:{...previous.estimate,probabilityA:allowed?previous.estimate.probabilityA:null,probabilityB:allowed?previous.estimate.probabilityB:null,probabilityTie:allowed?previous.estimate.probabilityTie:null},message:'Nova projeção suspensa: snapshot inválido, ausente, retido ou antigo. Horários e hashes operacionais originais preservados; autorização revalidada.'};
+        }
         return {...base,state:'insufficient-data',estimate:null,message:'Live sem baseline e snapshot íntegros, atuais e compatíveis; nova projeção suspensa.'};
     }
 }
