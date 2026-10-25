@@ -4,7 +4,7 @@ export async function testForecastVisibility({ load, request, poll, contest, asO
   const { buildForecast } = await load('forecast-server/service');
   const { probabilityLabel } = await load('forecast/format');
   const { timestamp } = await load('forecast/types');
-  const valid = { ...futureEvaluation, publishedAt: '2026-10-14' }; // Test-only metadata, not calibration evidence.
+  const valid = { ...futureEvaluation, publishedAt: '2026-10-14',reviewedAt:'2026-10-14' }; // Test-only metadata, not calibration evidence.
   const data = { ...request.data, dataVersion: 'test', polls: [poll], contest, candidates: ['a','b'].map(id => ({ id, name: id, sourceUrl: 'https://example.test', verifiedAt: '2026-10-01' })) };
   const base = { ...request, data: { ...data, evaluation: valid } };
   const cases = [
@@ -12,7 +12,8 @@ export async function testForecastVisibility({ load, request, poll, contest, asO
     ['evaluation-missing', null], ['evaluation-invalid', {}], ['evaluation-invalid', { ...valid, publishedAt: '2026-02-30' }],
     ['review-missing', { ...valid, qualityReviewed: false }], ['holdout-missing', { ...valid, independentHoldout: false }],
     ['not-operational', { ...valid, operational: false }], ['model-mismatch', { ...valid, modelVersion: 'other' }],
-    ['data-mismatch', { ...valid, dataVersion: 'other' }], ['parameters-mismatch', { ...valid, parametersHash: 'other' }],
+    ['evaluation-invalid', { ...valid, dataVersion: 'legacy-operational-hash' }], ['parameters-mismatch', { ...valid, parametersHash: 'other' }],
+    ['scope-mismatch',{...valid,mode:'live'}],['dependencies-mismatch',{...valid,transformationVersion:'other'}],['evaluation-expired',{...valid,validUntil:'2026-10-14'}],
     ['evaluation-after-cutoff', futureEvaluation], ['election-after-cutoff', { ...valid, evaluationElections: [2026] }],
   ];
   for (const [code, evaluation, flags = request.flags] of cases) {
@@ -29,6 +30,8 @@ export async function testForecastVisibility({ load, request, poll, contest, asO
   assert.equal(allowed.probabilityReason, null);
   assert.ok(Math.abs(allowed.estimate.probabilityA + allowed.estimate.probabilityB + allowed.estimate.probabilityTie - 1) < 1e-12);
   assert.equal(allowed.estimate.probabilityTie, 0);
+  assert.equal(buildForecast({...base,data:{...base.data,dataVersion:'new-observation'}}).publicProbabilityEnabled,true,'new observations do not replace the evaluated historical dataset hash');
+  assert.equal(buildForecast({...base,parametersHash:'changed-parameters'}).publicProbabilityEnabled,false);
   assert.notEqual(probabilityLabel(0), probabilityLabel(null));
   const { predictiveDistribution } = await load('forecast/distribution');
   assert.equal(predictiveDistribution(.5, 0, MODEL_CONFIG).probabilityTie, 1);

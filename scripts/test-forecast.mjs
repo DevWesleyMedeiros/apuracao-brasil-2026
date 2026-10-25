@@ -71,7 +71,7 @@ export async function testForecast(dir) {
   const series=history([poll],contest,['2026-10-11','2026-10-12'],MODEL_CONFIG,'test');
   assert.equal(series[0].result,null);assert.equal(series[1].result.pollCount,1);
   assert.equal(probabilityPermission({enabled:true,evaluation:null,asOf,year:2026,modelVersion:MODEL_CONFIG.version,dataVersion:'test',parametersHash:'test'}).publicProbabilityEnabled,false);
-  const futureEvaluation={id:'test',reportUrl:'https://example.test/evaluation',publishedAt:'2026-10-16',modelVersion:MODEL_CONFIG.version,dataVersion:'test',parametersHash:'test',trainingElections:[2018],evaluationElections:[2022],operational:true,qualityReviewed:true,independentHoldout:true};
+  const futureEvaluation={schemaVersion:'2',id:'test',mode:'pre',reportUrl:'https://example.test/evaluation',publishedAt:'2026-10-16',reviewedAt:'2026-10-16',validUntil:'2026-10-25',reviewReference:'https://example.test/review',modelVersion:MODEL_CONFIG.version,historicalDatasetHash:'a'.repeat(64),reportHash:'b'.repeat(64),protocol:'independent-holdout-test-only',transformationVersion:'tse-normalize-reconcile-v1',scope:{year:2026,round:'2',office:'1',territory:'br'},dependencies:{baselineHash:null,policyHash:null},parametersHash:'test',trainingElections:[2018],evaluationElections:[2022],operational:true,qualityReviewed:true,independentHoldout:true};
   assert.equal(probabilityPermission({enabled:true,evaluation:futureEvaluation,asOf,year:2026,modelVersion:MODEL_CONFIG.version,dataVersion:'test',parametersHash:'test'}).publicProbabilityEnabled,false);
   const report=evaluate({dataVersion:'test',provenance:['https://example.test'],elections:[{contest,polls:[poll],officialShareA:.48,resultSource:'https://example.test/result',parameters:MODEL_CONFIG,parameterProvenance:{trainedOn:[],availableAt:'2026-10-01',reference:'test',independentHoldout:true},cutoffs:[asOf]}]});
   assert.equal(report.metrics,null);assert.equal(report.operationalStatus,'no-valid-operational-test');
@@ -148,5 +148,5 @@ export async function testForecast(dir) {
   console.log('Passed: live 40/60 finished regression, B victory, exact ties, preserved low-progress votes, zero/invalid volume, all 28 territories, revisions, missing ZZ, withheld, source staleness/skew and original fallback times.');
   console.log('Passed: exact snapshot reconciliation, final mapping, reproducible logit distribution, weight decay, common error, ties, strict history and evaluation gates.');
   console.log('Passed: forecast contracts, real dates, publication cutoff, deduplication, scenarios, units, denominators and uncalibrated configuration.');
-  return { load, contest, poll, asOf, MODEL_CONFIG, snapshot, baseline, policy };
+  return { load, contest, poll, asOf, MODEL_CONFIG, snapshot, baseline, policy, ready, futureEvaluation, request, secondResults };
 }
