@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import type { ForecastResponse } from "@/lib/forecast-server/service";
 import { withDeadline } from "@/lib/deadline";
 import { probabilityLabel } from "@/lib/forecast/format";
+import { ForecastSeries } from './ForecastSeries';
 const percent = (p: number) =>
-  `${(100 * p).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+  `${(100 * p).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+const publishedProbability = (p: number | null) => p === null ? 'Probabilidade não publicada' : probabilityLabel(p);
 const labels = {
   disabled: "Desabilitado",
   "no-data": "Sem dados verificados",
@@ -68,7 +70,7 @@ export function ForecastPanel() {
             value={mode}
             onChange={(e) => changeMode(e.target.value as "pre" | "live")}
           >
-            <option value="pre">Pré-eleitoral</option>
+            <option value="pre">Pré-eleitoral · experimental</option>
             <option value="live">Ao vivo · experimental</option>
           </select>
         </label>
@@ -87,7 +89,7 @@ export function ForecastPanel() {
       {error && (
         <p role="alert" className="rounded border border-red-300 bg-red-50 p-4">
           {error} Use “Consultar novamente”.{" "}
-          <Link className="underline" href="/">
+          <Link className="underline" href="/?round=2">
             Abrir apuração oficial
           </Link>
           .
@@ -101,6 +103,7 @@ export function ForecastPanel() {
           >
             <h2 className="text-xl font-bold">{labels[data.state]}</h2>
             <p className="mt-2">{data.message}</p>
+            {mode === 'live' && <p className="mt-3"><Link className="font-semibold underline" href="/?round=2">Acompanhar apuração oficial presidencial · segundo turno</Link>. A projeção ao vivo não possui ingestão contínua ativa.</p>}
             {data.state === "stale" && (
               <p>
                 Último cálculo íntegro: {data.computedAt}. Não é uma atualização
@@ -112,28 +115,24 @@ export function ForecastPanel() {
             )}
           </section>
           <div className="grid gap-4 md:grid-cols-2">
-            <article className="rounded-lg border bg-white p-5">
-              <h2 className="font-bold">Parcela estimada dos votos válidos</h2>
-              <p>
-                Mediana preditiva e intervalo de 95% condicionado ao modelo; não
-                é chance de vitória.
-              </p>
-            </article>
-            <article className="rounded-lg border bg-white p-5">
-              <h2 className="font-bold">Probabilidade estimada de vitória</h2>
-              <p>
-                {data.probabilityReason ??
-                  "Condicional às hipóteses do modelo, não uma certeza."}
-              </p>
-              <p>
-                Calibração:{" "}
-                {data.calibrationStatus === "uncalibrated"
-                  ? "não estabelecida"
-                  : "revisada"}
-                .
-              </p>
-            </article>
+            {data.estimate && data.candidates.map((c, i) => {
+              const e = i === 0 ? data.estimate!.a : data.estimate!.b;
+              return <article key={c.id} className="min-w-0 rounded-lg border border-slate-300 bg-white p-5">
+                <h2 className="text-lg font-bold break-words">{c.name}</h2>
+                <p className="mt-3 text-sm">Parcela estimada dos votos válidos · mediana</p>
+                <p className="my-2 text-4xl font-bold tabular-nums sm:text-5xl">{percent(e.median)}</p>
+                <p className="tabular-nums">Intervalo preditivo de 95%: <strong className="inline-block">{percent(e.lo)} – {percent(e.hi)}</strong></p>
+                <p className="mt-2 text-sm">Condicionado ao modelo experimental; não é margem de erro de uma pesquisa.</p>
+                <div className="mt-4 border-t pt-3"><h3 className="text-sm font-semibold">Chance de vitória · não é parcela de votos</h3><p className="mt-1 font-bold tabular-nums">{publishedProbability(i === 0 ? data.estimate!.probabilityA : data.estimate!.probabilityB)}</p></div>
+              </article>;
+            })}
           </div>
+          <section className="rounded-lg border border-amber-400 bg-amber-50 p-5" aria-label="Estado da publicação de probabilidades">
+            <h2 className="text-lg font-bold">{data.publicProbabilityEnabled ? 'Probabilidades condicionais ao modelo' : 'Probabilidade não publicada'}</h2>
+            <p className="mt-2">{data.probabilityReason ?? 'Não são certezas nem resultados oficiais.'}</p>
+            <p className="mt-2">Calibração: {data.calibrationStatus === 'uncalibrated' ? 'não estabelecida' : 'revisada; consultar relatório e limites'}.</p>
+            {data.probabilityBlocks.length > 0 && <details className="mt-3"><summary className="cursor-pointer font-semibold">Detalhes auditáveis do bloqueio</summary><ul className="mt-2 list-disc space-y-2 pl-5">{data.probabilityBlocks.map(b => <li key={b.code}><code>{b.code}</code>: {b.message}</li>)}</ul></details>}
+          </section>
           <div className="overflow-x-auto rounded-lg border bg-white p-4">
             <table className="w-full text-left text-sm">
               <caption className="mb-3 text-left font-bold">
@@ -154,14 +153,14 @@ export function ForecastPanel() {
                     return (
                       <tr className="border-t" key={c.id}>
                         <th scope="row" className="p-2">
-                          {c.name}
+                          <a className="underline" href={c.sourceUrl}>{c.name}</a>
                         </th>
                         <td className="p-2">{percent(e.median)}</td>
                         <td className="p-2">
                           {percent(e.lo)}–{percent(e.hi)}
                         </td>
                         <td className="p-2">
-                          {probabilityLabel(
+                          {publishedProbability(
                             i === 0
                               ? data.estimate!.probabilityA
                               : data.estimate!.probabilityB,
@@ -181,16 +180,10 @@ export function ForecastPanel() {
               </tbody>
             </table>
           </div>
-          {data.estimate && (
-            <p>
-              Média ponderada das pesquisas para {data.candidates[0]?.name}:{" "}
-              {data.estimate.weightedPollShare === null
-                ? "Indisponível"
-                : percent(data.estimate.weightedPollShare)}
-              . Probabilidade de empate:{" "}
-              {probabilityLabel(data.estimate.probabilityTie)}.
-            </p>
-          )}
+          {data.estimate && <div className="grid gap-4 md:grid-cols-2">
+            <article className="min-w-0 rounded-lg border border-green-800 bg-green-50 p-5"><h2 className="text-lg font-bold">Média ponderada das pesquisas</h2><p className="mt-2 font-semibold">{data.candidates[0]?.name}</p><p className="my-2 text-4xl font-bold tabular-nums">{data.estimate.weightedPollShare === null ? 'Indisponível' : percent(data.estimate.weightedPollShare)}</p><p>Parcela de votos válidos nas pesquisas selecionadas, não chance de vitória.</p></article>
+            <article className="min-w-0 rounded-lg border bg-white p-5"><h2 className="text-lg font-bold">Empate exato no modelo</h2><p className="my-3 text-xl font-bold tabular-nums">{publishedProbability(data.estimate.probabilityTie)}</p>{data.estimate.probabilityTie === null && <p>{data.probabilityReason}</p>}<p className="mt-2 text-sm">Com dispersão, o modelo contínuo atribui 0% à igualdade exata. Isso não torna impossível um empate numa contagem real discreta. Não significa “empate técnico” nem mede disputa apertada. Casos sem dispersão têm tratamento próprio.</p></article>
+          </div>}
           <ForecastSeries data={data} />
           <section className="space-y-2 break-words rounded-lg border p-5 text-sm">
             <h2 className="font-bold">Auditoria e atualização</h2>
@@ -227,110 +220,6 @@ export function ForecastPanel() {
               exige execução manual separada.
             </p>
           </section>
-        </>
-      )}
-    </section>
-  );
-}
-function ForecastSeries({ data }: { data: ForecastResponse }) {
-  const points = [
-    ...data.polls.map((p) => ({
-      at: p.publishedAt,
-      value: p.share,
-      label: `Pesquisa · ${p.institute}`,
-      url: p.reportUrl,
-      weight: p.weight,
-    })),
-    ...data.series.map((p) => ({
-      at: p.asOf,
-      value: p.median,
-      label: "Projeção para a eleição",
-      url: "",
-      weight: null,
-    })),
-  ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  const times = points.map((p) =>
-    Date.parse(p.at.length === 10 ? `${p.at}T23:59:59-03:00` : p.at),
-  );
-  const start = Math.min(...times),
-    span = Math.max(1, Math.max(...times) - start);
-  return (
-    <section className="rounded-lg border bg-white p-5">
-      <h2 className="text-lg font-bold">Pesquisas e cortes históricos</h2>
-      <p className="mt-2 text-sm">
-        Círculos: intenção medida nas pesquisas. Quadrados: mediana projetada
-        para a eleição em cada corte. Eixo vertical: parcela de votos de{" "}
-        {data.candidates[0]?.name ?? "candidatura ainda não verificada"}.
-      </p>
-      {!points.length ? (
-        <p className="mt-5 rounded border border-dashed p-6">
-          Sem dados para gráfico. Não há curva estimada nem série fictícia.
-        </p>
-      ) : (
-        <>
-          <svg
-            className="mt-4 h-auto w-full"
-            viewBox="0 0 600 240"
-            role="img"
-            aria-label="Pontos de pesquisas e projeções históricas; valores na tabela abaixo"
-          >
-            <line x1="40" y1="210" x2="570" y2="210" stroke="currentColor" />
-            <text x="0" y="25" fontSize="12">
-              100%
-            </text>
-            <text x="5" y="210" fontSize="12">
-              0%
-            </text>
-            {points.map((p, i) => {
-              const x = 50 + ((times[i] - start) / span) * 500,
-                y = 210 - p.value * 190;
-              return p.weight === null ? (
-                <rect
-                  key={i}
-                  x={x - 4}
-                  y={y - 4}
-                  width="8"
-                  height="8"
-                  fill="#155392"
-                />
-              ) : (
-                <circle key={i} cx={x} cy={y} r="4" fill="#075536" />
-              );
-            })}
-          </svg>
-          <div className="overflow-x-auto">
-            <table className="mt-4 w-full text-left text-sm">
-              <caption className="text-left font-semibold">
-                Valores do gráfico e fontes
-              </caption>
-              <thead>
-                <tr>
-                  <th>Data de publicação/corte</th>
-                  <th>Tipo e fonte</th>
-                  <th>Parcela de votos</th>
-                  <th>Peso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {points.map((p, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="py-2">{p.at}</td>
-                    <th scope="row">
-                      {p.url ? (
-                        <a className="underline" href={p.url}>
-                          {p.label}
-                        </a>
-                      ) : (
-                        p.label
-                      )}
-                    </th>
-                    <td>{percent(p.value)}</td>
-                    <td>{p.weight === null ? "—" : percent(p.weight)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </section>
