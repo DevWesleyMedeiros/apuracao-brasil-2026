@@ -22,7 +22,7 @@ export default function MethodologyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-bold">Fontes e elegibilidade</h2>
         <p>
-          Base inicialmente vazia. Pesquisas precisam de relatório, registro TSE
+          A versão atual contém pesquisas e candidaturas cadastradas. Pesquisas precisam de relatório, registro TSE
           verificado manualmente, amostra, denominador, datas de campo,
           divulgação e revisão de curadoria. Formato de registro não comprova
           sua existência. Notícias repetidas não são novas pesquisas.
@@ -68,7 +68,10 @@ export default function MethodologyPage() {
           Mulberry32, seed explícita e pares antitéticos. Probabilidade é
           frequência condicional ao modelo, não certeza. Extremos são rotulados
           &lt;0,1% e &gt;99,9%, sem modificar valor bruto. Sigma zero e massa em
-          empate são tratados separadamente.
+          empate são tratados separadamente. “Empate exato no modelo” é igualdade
+          exata: com dispersão, sua probabilidade no modelo contínuo é zero, sem
+          excluir empate numa contagem real discreta. Não é “empate técnico”,
+          sobreposição de intervalos nem uma métrica de disputa apertada.
         </p>
         <p>
           deff={MODEL_CONFIG.designEffect}, erro comum=
@@ -83,7 +86,7 @@ export default function MethodologyPage() {
           Histórico e autorização de probabilidades
         </h2>
         <p>
-          Histórico recalculado usa cortes estritos de publicação e parâmetros
+          Série recalculada por corte com os dados desta versão usa cortes estritos de publicação e parâmetros
           versionados; não é um arquivo imutável de previsões publicadas.
           Reavaliações não substituem silenciosamente históricos arquivados.
           Nenhuma previsão pré-eleitoral atual é produzida após o pleito.
@@ -95,6 +98,23 @@ export default function MethodologyPage() {
           temporal exige treino apenas em eleições anteriores ao corte; sem
           isso, não existe teste operacional válido. Horizontes da mesma eleição
           não são eventos independentes.
+        </p>
+        <p>
+          Nesta versão, evaluation.json é null: faltam dataset retrospectivo com
+          fontes oficiais e parâmetros disponíveis nos cortes, treino anterior e
+          holdout independente, relatório operacional e revisão documentada.
+          Baseline e snapshot ao vivo também não foram fornecidos. Metadados
+          booleanos sozinhos não comprovam calibração. A interface informa os
+          bloqueios por códigos auditáveis; null não é zero nem falha de consulta.
+          Alterações nos dados atuais mudam dataVersion e invalidam a vinculação
+          da avaliação anterior; exigem nova revisão dos hashes, não relaxamento do gate.
+        </p>
+        <p>
+          A escala completa do gráfico vai de 0 a 100%. A escala ampliada é
+          identificada e inclui pesquisas, intervalos preditivos, margem visual e
+          50%, limitada a [0,1]. Sem nova pesquisa elegível, o decaimento comum
+          cancela na normalização dos pesos: platôs da mediana podem ser corretos,
+          mesmo que a incerteza temporal mude. Não alteramos pesos para animar a curva.
         </p>
         <p>
           O CLI calcula MAE, RMSE, cobertura, largura, Brier e log loss
@@ -112,6 +132,7 @@ export default function MethodologyPage() {
           retido ou antigo suspende novo cálculo; stale preserva horário
           original.
         </p>
+        <p>Imports estáticos de baseline/snapshot e um coletor manual não alimentam continuamente o deploy. Enquanto esse fluxo não for revisado, use a <Link className="underline" href="/?round=2">apuração oficial presidencial de segundo turno</Link>, independente do motor estatístico.</p>
         <p>
           Preservamos votos observados: A final=Σ(a+R·p restante); R=volume
           esperado−(a+b)≥0. No fechamento oficial, R=0 e intervalo colapsa no
