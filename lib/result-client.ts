@@ -12,10 +12,14 @@ export async function loadElectionResult(uf: string, office: string, signal: Abo
     }
     const payload = await response.json() as Result & { message?: string };
     if (!response.ok) throw new Error(payload.message || 'Não foi possível carregar a apuração.');
-    if (payload.round !== (options.round ?? '1')) throw new Error('Resposta de outro turno.');
+    if (payload?.round !== (options.round ?? '1')) throw new Error('Resposta de outro turno.');
     if (!payload || !Array.isArray(payload.candidates) || !payload.sections || !payload.votes) {
       throw new Error('O servidor retornou uma resposta incompleta. Tente novamente.');
     }
+    const expectedUf = region ? `region:${region}` : uf;
+    const expectedOffice = uf === 'df' && office === '7' ? '8' : office;
+    const expectedScope = region ? 'region' : municipality ? 'mu' : uf === 'br' ? 'br' : 'uf';
+    if (payload.uf !== expectedUf || payload.office !== expectedOffice || payload.region !== region || payload.municipality?.code !== municipality || payload.context?.round !== payload.round || payload.context?.election !== payload.election || payload.context?.cycle !== 'ele2026' || payload.context?.year !== 2026 || payload.context?.office !== expectedOffice || payload.context?.territory !== (region ? expectedUf : municipality ?? uf) || payload.context?.scope !== expectedScope || payload.context?.electionDate !== (payload.round === '2' ? '25/10/2026' : '04/10/2026') || !['waiting', 'withheld', 'partial', 'finished'].includes(payload.state)) throw new Error('Resposta de outro contexto eleitoral ou território.');
     return payload;
   }, timeoutMs, signal);
 }
