@@ -3,6 +3,7 @@ import { compileDomain } from './domain-loader.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { atomicJson, archive, retryDownload } from './forecast-cli.mjs';
+import { testForecastVisibility } from './test-forecast-visibility.mjs';
 
 export async function testForecast(dir) {
   const load = compileDomain(dir);
@@ -84,6 +85,7 @@ export async function testForecast(dir) {
   const ready=buildForecast({...request,data:{...request.data,polls:[poll],contest,candidates:['a','b'].map(id=>({id,name:id,sourceUrl:'https://example.test',verifiedAt:'2026-10-01'}))}});
   assert.equal(ready.state,'ready'); assert.equal(ready.estimate.probabilityA,null);assert.equal(ready.estimate.probabilityB,null);assert.equal(ready.estimate.probabilityTie,null);
   assert.equal(ready.publicProbabilityEnabled,false);assert.ok(!JSON.stringify(ready).includes('probabilityA":0.5'));
+  await testForecastVisibility({ load, request, poll, contest, asOf, MODEL_CONFIG, futureEvaluation });
   assert.throws(()=>forecastQuery(new URLSearchParams('mode=pre&simulations=100'),timestamp(asOf)));
   assert.throws(()=>forecastQuery(new URLSearchParams('mode=pre&mode=live'),timestamp(asOf)));
   assert.throws(()=>forecastQuery(new URLSearchParams('mode=pre&asOf=2026-10-24'),timestamp(asOf)));

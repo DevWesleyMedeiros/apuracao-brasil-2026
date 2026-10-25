@@ -9,7 +9,7 @@ import { testCuration } from './test-curation.mjs';
 // Compile the actual domain modules; no extra test runner or network required.
 const dir=fs.mkdtempSync(path.join(process.cwd(),'.election-tests-'));
 try {
-  for(const name of ['catalog','election','tse','chart-data','deadline','result-client','regional','municipal','electoral-context']) {
+  for(const name of ['catalog','election','tse','chart-data','deadline','result-client','regional','municipal','electoral-context','official-dashboard']) {
     const source=fs.readFileSync(`lib/${name}.ts`,'utf8');
     const output=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText.replaceAll("'./catalog'","'./catalog.mjs'").replaceAll("'./election'","'./election.mjs'").replaceAll("'./deadline'","'./deadline.mjs'").replaceAll("'./regional'","'./regional.mjs'").replaceAll("'./municipal'","'./municipal.mjs'");
     fs.writeFileSync(path.join(dir,`${name}.mjs`),output.replace(/(['"])(\.\/[^'"]+?)(?:\.mjs)?\1/g, (_, quote, name) => `${quote}${name}.mjs${quote}`));
@@ -32,6 +32,27 @@ try {
   const config={f:'o',pl:[{c:'ele2026',dt:'04/10/2026',e:[{cd:'6257',t:'1',abr:[{cp:[{cd:'1'}]}]},{cd:'6259',t:'1',abr:[{cp:[{cd:'3'},{cd:'5'},{cd:'6'},{cd:'7'},{cd:'8'}]}]}]}]};
   const raw={ele:'6257',t:'1',f:'o',cdabr:'br',tpabr:'br',dg:'04/10/2026',hg:'17:15:00',dt:'04/10/2026',ht:'17:14:00',dv:'s',tf:'n',and:'p',carg:[{cd:'1',nmn:'Presidente',nv:'1',agr:[{par:[{sg:'TESTE',cand:[{n:'99',sqcand:'test',nmu:'CANDIDATO DE TESTE',nm:'CANDIDATO DE TESTE',vap:'1234',pvap:'43,21',st:'',e:'n'}]}]}]}],s:{ts:'100',st:'50',pst:'50,00'},v:{vv:'3000',vb:'100',tvn:'50'}};
   const normalized=normalizeResult(raw,'br','1','6257','https://example.test');
+  const {initialRound, shouldRefreshOfficial, initialOfficialQuery, completeOfficialQuery}=await import(pathToFileURL(path.join(dir,'official-dashboard.mjs')));
+  const midnight=Date.parse('2026-10-25T00:00:00-03:00');
+  assert.equal(initialRound(undefined,midnight-1),'1');assert.equal(initialRound(undefined,midnight),'2');
+  assert.equal(initialRound('1',midnight+86400000),'1');assert.equal(initialRound('2',midnight-86400000),'2');
+  assert.equal(initialRound('invalid',midnight),'2');assert.equal(initialRound(['1','2'],midnight-1),'1');
+  const refreshInput={now:120000,lastAttempt:60000,hidden:false,busy:false,auto:true};
+  assert.equal(shouldRefreshOfficial(refreshInput),true);
+  for(const change of [{hidden:true},{busy:true},{auto:false},{now:119999}]) assert.equal(shouldRefreshOfficial({...refreshInput,...change}),false);
+  // Actual reducer used by the UI: transitions, stale/error recovery, old request after context switch.
+  let q=initialOfficialQuery('round2:br');
+  for(const [expected,change] of [['waiting',{and:'n'}],['partial',{}],['finished',{tf:'s'}],['withheld',{dv:'n'}]]) {
+    const result=normalizeResult({...raw,t:'2',ele:'6258',...change},'br','1','6258','https://example.test',undefined,{round:'2'});
+    q=completeOfficialQuery(q,q.key,{result,lastCheck:expected});assert.equal(q.result.state,expected);
+  }
+  const previous=q;
+  q=completeOfficialQuery(q,q.key,{error:'offline'});assert.equal(q.result,previous.result);assert.equal(q.lastCheck,previous.lastCheck);assert.equal(q.error,'offline');
+  q=completeOfficialQuery(q,q.key,{result:{...previous.result,stale:true},lastCheck:'new query'});assert.equal(q.result.generatedAt,previous.result.generatedAt);assert.equal(q.result.stale,true);
+  q=completeOfficialQuery(q,q.key,{result:previous.result,lastCheck:'recovery'});assert.equal(q.error,'');assert.equal(q.result.stale,undefined);
+  const switched=initialOfficialQuery('round1:rs:city');
+  assert.equal(completeOfficialQuery(switched,'round2:br',{result:previous.result,lastCheck:'late'}),switched);
+  assert.equal(switched.result,null);
   assert.equal(normalized.candidates[0].percent,43.21);
   assert.equal(normalized.votes.legend,null);
   assert.equal(normalized.state,'partial');
@@ -192,11 +213,20 @@ try {
     globalThis.fetch=async()=>({ok:true,headers:new Headers({'content-type':'application/json'}),json:()=>new Promise(()=>{})});
     await assert.rejects(loadElectionResult('br','1',new AbortController().signal,15),RequestTimeoutError,'response body must share the deadline');
     let requestedUrl='';
-    globalThis.fetch=async url=>{requestedUrl=String(url);return Response.json(normalized);};
+    globalThis.fetch=async url=>{requestedUrl=String(url);return Response.json(String(url).includes('region=') ? south : municipalResult);};
     await loadElectionResult('br','1',new AbortController().signal,100,'sul');
     assert.equal(requestedUrl,'/api/results?uf=br&office=1&region=sul');
     await loadElectionResult('ac','1',new AbortController().signal,100,undefined,'01120');
     assert.equal(requestedUrl,'/api/results?uf=ac&office=1&municipality=01120');
+    globalThis.fetch=async()=>Response.json(normalized);
+    await assert.rejects(loadElectionResult('br','1',new AbortController().signal,100,undefined,undefined,{round:'2'}),/outro turno/);
+    await assert.rejects(loadElectionResult('zz','1',new AbortController().signal,100),/contexto eleitoral/);
+    await assert.rejects(loadElectionResult('br','1',new AbortController().signal,100,'sul'),/contexto eleitoral/);
+    await assert.rejects(loadElectionResult('ac','1',new AbortController().signal,100,undefined,'01120'),/contexto eleitoral/);
+    globalThis.fetch=async()=>Response.json({...normalized,context:{...normalized.context,election:'other'}});
+    await assert.rejects(loadElectionResult('br','1',new AbortController().signal,100),/contexto eleitoral/);
+    globalThis.fetch=async()=>Response.json({...normalized,uf:'df',office:'8',context:{...normalized.context,office:'8',territory:'df',scope:'uf'}});
+    assert.equal((await loadElectionResult('df','7',new AbortController().signal,100)).office,'8','DF office alias must remain compatible');
     globalThis.fetch=async()=>Response.json({uf:'ac',election:'6257',sourceUrl:'x',municipalities:[city]});
     assert.equal((await loadMunicipalities('ac',new AbortController().signal,100)).municipalities[0].code,'01120');
     await assert.rejects(loadMunicipalities('rs',new AbortController().signal,100),'list from previous UF must be rejected');
