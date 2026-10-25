@@ -1,6 +1,6 @@
 import { aggregate } from '../forecast/aggregate';
 import { history } from '../forecast/history';
-import { probabilityPermission } from '../forecast/quality';
+import { probabilityPermission, type ProbabilityBlock } from '../forecast/quality';
 import { candidateSchema, contestSchema, timestamp, type ModelConfig } from '../forecast/types';
 import { supportsProductionContest } from '../forecast/production-context';
 
@@ -10,7 +10,7 @@ type Estimate = { a: { median: number; lo: number; hi: number }; b: { median: nu
 export type ForecastMetadata = {
     mode: ForecastMode; context: { cycle: string; year: number; round: '2'; office: '1'; scope: 'br'; election: string | null; electionAt: string };
     asOf: string; computedAt: string; sourceUpdatedAt: string | null; modelVersion: string; dataVersion: string; parametersHash: string; seed: number;
-    calibrationStatus: 'reviewed' | 'uncalibrated'; publicProbabilityEnabled: boolean; probabilityReason: string | null;
+    calibrationStatus: 'reviewed' | 'uncalibrated'; publicProbabilityEnabled: boolean; probabilityReason: string | null; probabilityBlocks: ProbabilityBlock[];
     candidates: { id: string; name: string; sourceUrl: string; verifiedAt: string }[];
     pollCount: number; instituteCount: number; eligibleCount: number; newestFieldAgeDays: number | null; weightConcentration: number | null;
     sources: string[]; warnings: string[]; historical: boolean;
